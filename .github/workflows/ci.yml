@@ -1,0 +1,96 @@
+# On every push and pull request:
+#   - test: the suite on Python 3.11, 3.12 and 3.14, on Ubuntu 24.04 and macOS 15, on Node 24,
+#     plus one cell on Ubuntu 24.04, Python 3.12, Node 22 (G0 D2 = A). `uv sync --locked` builds
+#     the editable install, whose hatchling hook vendors @typedstandards/cli from package-lock.json,
+#     so the tests drive the tree a wheel ships.
+#   - lint: ruff check and ruff format --check.
+#   - wheel: builds the sdist and, from it, the wheel, installs the wheel into a fresh environment,
+#     and runs scripts/smoke_wheel.py there with a throwaway seed.
+# Each job name is stable: the ruleset on main requires these checks by name.
+# The workflow holds no key and reads no repository secret.
+# Each action is pinned to a full commit SHA, measured with git ls-remote, with its tag in a comment.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (py${{ matrix.python }}, ${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+        python: ["3.11", "3.12", "3.14"]
+        node: ["24"]
+        include:
+          - os: ubuntu-24.04
+            python: "3.12"
+            node: "22"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.11.25"
+          python-version: ${{ matrix.python }}
+          enable-cache: false
+      - run: node --version && npm --version && uv --version
+      - run: uv sync --locked
+      - run: uv run python --version
+      - run: uv run pytest
+
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+          enable-cache: false
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  wheel:
+    name: wheel (build, install, smoke)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+          enable-cache: false
+      # uv build makes the sdist, then the wheel from the unpacked sdist.
+      - run: uv build
+      - run: ls -l dist && unzip -l dist/*.whl | grep -c '_vendor/node_modules/'
+      - run: uv venv "$RUNNER_TEMP/smoke"
+      - run: uv pip install --python "$RUNNER_TEMP/smoke" dist/*.whl
+      - name: smoke check in the fresh environment, with a throwaway seed
+        run: |
+          TYPEDSTANDARDS_SIGNING_SEED_B64="$(openssl rand -base64 32)" "$RUNNER_TEMP/smoke/bin/python" scripts/smoke_wheel.py
