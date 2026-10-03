@@ -17,6 +17,10 @@ manager a non-interactive shell may have no `node` on `PATH`; load it first
   `uv sync --reinstall-package typedstandards`.
 - Another Python: `uv run --python 3.11 pytest`. Another Node: put it first on `PATH`, or set
   `TYPEDSTANDARDS_NODE`.
+- Every test runs offline: an autouse fixture in `tests/conftest.py` makes socket connect, bind
+  and `create_connection` raise. `pin`'s tests use `httpx.MockTransport`. `marimo` and
+  `nbformat` are in the dev group only, so the helpers' tests drive the real `mo.md`, `mo.Html`
+  and nbformat schema; the package never imports either at module load.
 
 The checks CI runs (`.github/workflows/ci.yml`):
 
