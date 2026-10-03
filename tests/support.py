@@ -123,3 +123,25 @@ def synthetic_notebook(
         return json.dumps(notebook, sort_keys=True, ensure_ascii=ensure_ascii)
     text = json.dumps(notebook, sort_keys=True, indent=indent, ensure_ascii=ensure_ascii, separators=(",", ": "))
     return (text + "\n").replace("\n", newline)
+
+
+def analysis_input(**extra: Any) -> dict[str, Any]:
+    """A scripted-recomputation envelope input for a file signed inline (``output_file``), with a
+    self-certifying signer whose identifier the CLI fills with the seed's did:key."""
+    value: dict[str, Any] = {
+        "type": "content/analysis/v1",
+        "producerProfile": "scripted-recomputation/example",
+        "captureMethod": "script-run",
+        "prompt": "Run the example notebook end to end and record its output.",
+        "promptVisibility": "full_text",
+        "queries": [
+            {"tool": "jupyter nbconvert --execute", "operationType": "script-run", "arguments": {"notebook": "x"}}
+        ],
+        "dataSources": [],
+        "cost": {"model": "none"},
+        "skillMetadata": {},
+        "trace": {"resourceSpans": []},
+        "signer": {"bindingTier": "pseudonymous", "displayName": "Example analyst"},
+    }
+    value.update(extra)
+    return value

@@ -11,6 +11,7 @@ from ._badge import badge_cell
 from ._cli import cli_entry
 from ._cli import run as _run
 from ._commands import attest, sign, verify, view, withdraw
+from ._comparison import comparison_cell
 from ._node import NODE_FLOOR, NODE_OVERRIDE, locate_node
 from .errors import (
     CliError,
@@ -49,6 +50,7 @@ __all__ = [
     "badge_cell",
     "cli_entry",
     "cli_version",
+    "comparison_cell",
     "locate_node",
     "sign",
     "verify",
