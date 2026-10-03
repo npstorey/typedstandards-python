@@ -1,0 +1,10 @@
+# The vendored CLI, written by hatch_build.py at every wheel or editable build.
+/src/typedstandards/_vendor/
+/node_modules/
+/dist/
+/build/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/

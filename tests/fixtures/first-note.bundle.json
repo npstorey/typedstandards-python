@@ -1,0 +1,78 @@
+{
+  "protocolVersion": "0.1.0",
+  "packageHash": "7e60369584c819074ca8148f1173478e3bdd11ce520ce9bdad1f2a117e9804cb",
+  "visibility": "public",
+  "captureMethod": "script-run",
+  "contentProfile": "default",
+  "producerProfile": "scripted-recomputation/host-template",
+  "type": "content/analysis/v1",
+  "signer": {
+    "bindingTier": "pseudonymous",
+    "displayName": "typedstandards-host-template",
+    "identifier": "did:key:z6Mks7BK2kyVhoPY3ayt6ALKeZY5eCbu64XyQuje9gTUxiUB"
+  },
+  "contentHash": {
+    "sha256": "33f9c6829114d5a71e9acf99c74b0fb2ea957963f60aa496c0d508a7081f7ada"
+  },
+  "contentCanonicalization": "https://typedstandards.org/canonicalization/raw-bytes/v1",
+  "signature": {
+    "signature": "c5sQFF5UznkjmNxgFsJLgvrHzkYmO6mTAanSWvFJyKN1JhwLTdPVA+joimeQxG0o5KIbaaifW9CFVuMh2xMrCg==",
+    "publicKey": "MCowBQYDK2VwAyEAvAL2Gnw9fYcVnr8jA68102bdP43R5Nfck/RmIDrPazQ=",
+    "algorithm": "Ed25519ph",
+    "kid": "did:key:z6Mks7BK2kyVhoPY3ayt6ALKeZY5eCbu64XyQuje9gTUxiUB"
+  },
+  "trustRegistryUrl": "https://host-template.typedstandards.org/.well-known/typed-publisher.json",
+  "subjectTitle": "A first signed note",
+  "subjectSummary": null,
+  "trustRegistry": {
+    "$comment": "This template's own statement about the signing key of its example record, served at https://host-template.typedstandards.org/.well-known/typed-publisher.json. The key is a pseudonymous did:key, generated for one signature and deleted after it. This registry is not a Typed Standards record, and not an endorsement by the Typed Standards specification or by typedstandards.org, although this host is a subdomain of it. activatedAt is the earliest createdAt among the records this host serves, as the signer states it.",
+    "keys": [
+      {
+        "kid": "did:key:z6Mks7BK2kyVhoPY3ayt6ALKeZY5eCbu64XyQuje9gTUxiUB",
+        "publicKey": "MCowBQYDK2VwAyEAvAL2Gnw9fYcVnr8jA68102bdP43R5Nfck/RmIDrPazQ=",
+        "status": "active",
+        "activatedAt": "2026-09-29T12:59:35.367Z",
+        "deprecatedAt": null,
+        "revokedAt": null,
+        "signerIdentity": {
+          "bindingTier": "pseudonymous",
+          "identifier": "did:key:z6Mks7BK2kyVhoPY3ayt6ALKeZY5eCbu64XyQuje9gTUxiUB",
+          "displayName": "typedstandards-host-template"
+        }
+      }
+    ]
+  },
+  "package": {
+    "metadata": {
+      "schemaVersion": "0.1.0",
+      "packageId": "39fc687f-3674-4bed-9b66-25caa5d299e2",
+      "createdAt": "2026-09-29T12:59:35.367Z",
+      "signingKeyId": "did:key:z6Mks7BK2kyVhoPY3ayt6ALKeZY5eCbu64XyQuje9gTUxiUB",
+      "captureMethod": "script-run"
+    },
+    "producerProfile": "scripted-recomputation/host-template",
+    "type": "content/analysis/v1",
+    "signer": {
+      "bindingTier": "pseudonymous",
+      "displayName": "typedstandards-host-template",
+      "identifier": "did:key:z6Mks7BK2kyVhoPY3ayt6ALKeZY5eCbu64XyQuje9gTUxiUB"
+    },
+    "contentCanonicalization": "https://typedstandards.org/canonicalization/raw-bytes/v1",
+    "prompt": {
+      "hash": "cc854b47ec831268766610e8f3fd49ce561e2b6faf31d63980198c73e3dd4030",
+      "visibility": "full_text",
+      "text": "Sign the note as a file read from disk."
+    },
+    "queries": [],
+    "dataSources": [],
+    "cost": {
+      "model": "none"
+    },
+    "skillMetadata": {},
+    "output": "# A first signed note\n\nThis note is the example record of the typedstandards-host-template repository.\nIt was signed under `raw-bytes/v1` with a throwaway key, generated for this one\nsignature and deleted after it, so no other record and no withdrawal can be\nsigned under its `did:key`.\n\nReplace it with your own record when you copy the template.\n",
+    "trace": {},
+    "contentHash": {
+      "sha256": "33f9c6829114d5a71e9acf99c74b0fb2ea957963f60aa496c0d508a7081f7ada"
+    }
+  }
+}

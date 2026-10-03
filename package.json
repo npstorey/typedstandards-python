@@ -1,0 +1,9 @@
+{
+  "name": "typedstandards-python-vendored-cli",
+  "private": true,
+  "description": "The CLI the typedstandards wheel vendors. The hatchling build hook (hatch_build.py) runs npm ci --omit=dev --ignore-scripts against this file and package-lock.json, and ships the tree inside the wheel.",
+  "license": "MIT",
+  "dependencies": {
+    "@typedstandards/cli": "0.2.0"
+  }
+}

@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "typedstandards"
+dynamic = ["version"]
+description = "Sign, withdraw, attest to, build views of and verify Typed Standards records from Python, through @typedstandards/cli as a child process."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Nathan Storey" }]
+keywords = ["typed-standards", "provenance", "signing", "verification", "notebook"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.14",
+]
+# Declared now for P2's helpers (pin, sidecar); nothing in P1 imports either.
+dependencies = [
+  "httpx>=0.28",
+  "PyYAML>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/npstorey/typedstandards-python"
+Issues = "https://github.com/npstorey/typedstandards-python/issues"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.4",
+  "ruff>=0.14",
+]
+
+[tool.hatch.version]
+path = "src/typedstandards/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src/typedstandards",
+  "/tests",
+  "/hatch_build.py",
+  "/package.json",
+  "/package-lock.json",
+  "/README.md",
+  "/CHANGELOG.md",
+  "/LICENSE",
+]
+exclude = ["/src/typedstandards/_vendor"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/typedstandards"]
+# The vendored CLI is git-ignored, so it is named here to be shipped.
+artifacts = ["src/typedstandards/_vendor/**"]
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
+[tool.uv]
+# Rebuild the editable install (and so re-run the vendoring hook) when any of these change.
+cache-keys = [
+  { file = "pyproject.toml" },
+  { file = "package.json" },
+  { file = "package-lock.json" },
+  { file = "hatch_build.py" },
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
