@@ -7,6 +7,7 @@ from the environment it inherits, and does all of the format's work.
 
 from __future__ import annotations
 
+from ._badge import badge_cell
 from ._cli import cli_entry
 from ._cli import run as _run
 from ._commands import attest, sign, verify, view, withdraw
@@ -45,6 +46,7 @@ __all__ = [
     "VerificationError",
     "__version__",
     "attest",
+    "badge_cell",
     "cli_entry",
     "cli_version",
     "locate_node",

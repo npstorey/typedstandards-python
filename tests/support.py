@@ -70,3 +70,56 @@ def write_stub(directory: Path, name: str, version: str, exit_code: int = 4, std
 
 class NetworkBlocked(RuntimeError):
     """Raised by conftest.py's autouse guard when a test opens a connection or binds a port."""
+
+
+def synthetic_notebook(
+    *,
+    minor: int = 5,
+    indent: int | None = 1,
+    ensure_ascii: bool = False,
+    newline: str = "\n",
+    cells: list[dict[str, Any]] | None = None,
+) -> str:
+    """A small notebook's text, written as nbformat writes it by default (sorted keys, indent 1,
+    a trailing newline, raw UTF-8), or in another style for the splice tests."""
+    if cells is None:
+        cells = [
+            {
+                "cell_type": "markdown",
+                "id": "intro",
+                "metadata": {},
+                "source": ["# Example analysis\n", "\n", "Résumé of the method — café 実験.\n"],
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 1,
+                "id": "load",
+                "metadata": {"tags": ["parameters"]},
+                "outputs": [{"name": "stdout", "output_type": "stream", "text": ["1.50\n"]}],
+                "source": ["total = 1.50\n", "print(f'{total:.2f}')"],
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "id": "plot",
+                "metadata": {},
+                "outputs": [],
+                "source": ["values = [1e-3, 2.0, -0.0]"],
+            },
+        ]
+        if minor < 5:
+            for cell in cells:
+                del cell["id"]
+    notebook = {
+        "cells": cells,
+        "metadata": {
+            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+            "language_info": {"name": "python", "version": "3.12.0"},
+        },
+        "nbformat": 4,
+        "nbformat_minor": minor,
+    }
+    if indent is None:
+        return json.dumps(notebook, sort_keys=True, ensure_ascii=ensure_ascii)
+    text = json.dumps(notebook, sort_keys=True, indent=indent, ensure_ascii=ensure_ascii, separators=(",", ": "))
+    return (text + "\n").replace("\n", newline)

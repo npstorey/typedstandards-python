@@ -34,7 +34,11 @@ Homepage = "https://github.com/npstorey/typedstandards-python"
 Issues = "https://github.com/npstorey/typedstandards-python/issues"
 
 [dependency-groups]
+# marimo and nbformat are development-only: the helpers' tests drive the real implementations
+# (mo.md, mo.Html, nbformat's schema and writer). The package never imports either at module load.
 dev = [
+  "marimo>=0.25.1",
+  "nbformat>=5.11.1",
   "pytest>=8.4",
   "ruff>=0.14",
 ]
