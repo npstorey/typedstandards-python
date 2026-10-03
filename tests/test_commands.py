@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib  # test code only: checks what the CLI computed
 import json
 import logging
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -170,3 +172,10 @@ def test_vendored_tree_carries_each_licence() -> None:
     for key in packages:
         assert (vendor / key / "LICENSE").is_file(), key
     assert not (vendor / "node_modules" / ".bin").exists()
+
+
+def test_import_loads_neither_p2_dependency() -> None:
+    """httpx and PyYAML are declared for P2's helpers; importing the package loads neither."""
+    code = "import sys, typedstandards; print(sorted(m for m in ('httpx', 'yaml') if m in sys.modules))"
+    printed = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
+    assert printed.strip() == "[]"
