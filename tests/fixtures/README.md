@@ -35,6 +35,8 @@ captured once and committed. A test pins each one's SHA-256 too.
 | `record-withdrawn.withdrawal.json` | the wrapper's `withdraw` of that record, same key | `capture_records.py` | 2026-10-03 | `42bfe9b0ee86ba5b219c62a472a1d0e8ee45b5191fc7a7dd8cde842b69859a2e` | `tests/test_fixtures.py` |
 | `record-withdrawn.bundle.json` | the wrapper's `view` of the record with the withdrawal | `capture_records.py` | 2026-10-03 | `33b608d24e36beca3314fde938513252380e2ffbeaff3312e4dcb4f58482d2eb` | `tests/test_fixtures.py` |
 | `record-withdrawn.verify.json` | the wrapper's `verify` (`--json`) of the bundle | `capture_records.py` | 2026-10-03 | `8b882a0bc06300add88b5186b11861279a1f6505f80344d1c279aa1eaa3ad4ef` | `tests/test_fixtures.py` |
+| `show-active.html` | `typedstandards.show` of `record-active.bundle.json` with `record-active.verify.json`, plus a newline | below | 2026-10-03 | `d3a7d57e3cd0b43c64df3b09739266dcf904d2aba57d8aeb9653933998e56adc` | `tests/test_show.py` (byte-equal) |
+| `show-withdrawn.html` | the same for the withdrawn record | below | 2026-10-03 | `0dac25d3c0d124c5c158d9678aec0ff4f316aaaa13d93555a942c87bbd106f8d` | `tests/test_show.py` (byte-equal) |
 
 - **`badge-golden.json`** holds six bundle URLs, each with what host-core's own
   `buildVerifyHref(CANONICAL_ORIGIN, url)` and `buildEmbedMarkdown(CANONICAL_ORIGIN, url)`
@@ -65,3 +67,10 @@ captured once and committed. A test pins each one's SHA-256 too.
   `verify --json` of each bundle still equals the captured document; `tests/test_sidecar.py` builds
   a fresh `view` from each `*.signed.json` through the CLI; `tests/test_show.py` renders from the
   captured bundles and `verify` documents without Node.
+
+- **`show-*.html`** are this package's own rendering of the two captured records, committed so
+  that a change to `show`'s output, intended or not, fails `tests/test_show.py`, which asserts the
+  rendering equals the file byte for byte. They are written by
+  `sys.stdout.buffer.write((typedstandards.show(bundle, result).html + "\n").encode())` with each
+  record's bundle and verify document loaded from this directory. Regenerate them only with a
+  deliberate change to the rendering.
