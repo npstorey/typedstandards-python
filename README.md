@@ -143,7 +143,7 @@ ts.comparison_cell(
 signed = ts.sign({**record, "queries": [entry]}, output_file="analysis.ipynb")
 bundle = ts.view(signed, visibility="public", title="Example analysis")
 ts.sidecar(bundle, "analysis.ipynb")  # writes analysis.ipynb.record.yaml
-ts.show(bundle)                       # in Jupyter; ts.show(bundle, marimo=True) in Marimo
+ts.show(bundle)  # in Jupyter; ts.show(bundle, marimo=True) in Marimo
 ```
 
 - **`pin(url, *, licence=None, dataset_id=None, portal_metadata=None, save=None, ...)`** fetches
