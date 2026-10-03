@@ -22,6 +22,7 @@ from .errors import (
     UsageError,
     VerificationError,
 )
+from .pin import Pinned, pin
 
 __version__ = "0.1.0.dev0"
 
@@ -42,6 +43,7 @@ __all__ = [
     "CliNotVendoredError",
     "InternalError",
     "NodeLocatorError",
+    "Pinned",
     "SeedError",
     "UsageError",
     "VerificationError",
@@ -52,6 +54,7 @@ __all__ = [
     "cli_version",
     "comparison_cell",
     "locate_node",
+    "pin",
     "sign",
     "verify",
     "view",

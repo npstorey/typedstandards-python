@@ -23,8 +23,8 @@ HASH_MODULES = frozenset(
     {"hashlib", "_hashlib", "_sha1", "_sha2", "_sha256", "_sha512", "_sha3", "_md5", "_blake2", "hmac"}
 )
 
-#: The one module allowed to import hashlib: P2's pin (it does not exist yet), relative to the
-#: package directory.
+#: The one module allowed to import hashlib, relative to the package directory: pin.py, whose
+#: SHA-256 of fetched bytes is a signed assertion in queries[] that no check recomputes.
 HASH_ALLOWLIST = frozenset({"pin.py"})
 
 #: Calls that start a process with an explicit environment, or change this process's.
