@@ -46,6 +46,7 @@ path = "src/typedstandards/__init__.py"
 include = [
   "/src/typedstandards",
   "/tests",
+  "/scripts",
   "/hatch_build.py",
   "/package.json",
   "/package-lock.json",
