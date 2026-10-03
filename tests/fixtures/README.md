@@ -28,6 +28,13 @@ captured once and committed. A test pins each one's SHA-256 too.
 | File | Captured from | Command | Date | SHA-256 | Pinned by |
 |---|---|---|---|---|---|
 | `badge-golden.json` | `@typedstandards/host-core`'s `links.ts` at typedstandards `116882a` (`packages/host-core/src/links.ts`), run by Node 24.21.0 | below | 2026-10-03 | `bd70f819249e8f8a5f3cf1245cbd521c32e3671623a4d3d6e009f71ae6661eaa` | `tests/test_badge.py` |
+| `record-active.signed.json` | the wrapper's `sign`, through the vendored `@typedstandards/cli` 0.2.0, Node 24.21.0 | `capture_records.py` | 2026-10-03 | `6a43fcbbd205a94ad71b94c7600b61c740177568b345af2744a947236285abfc` | `tests/test_fixtures.py` |
+| `record-active.bundle.json` | the wrapper's `view` of the above | `capture_records.py` | 2026-10-03 | `aa75bd9ad6f7c101ee2c3a96373e97826e6fae6dfa172bdc1e84bf69efcf5937` | `tests/test_fixtures.py` |
+| `record-active.verify.json` | the wrapper's `verify` (`--json`) of the bundle | `capture_records.py` | 2026-10-03 | `a37890a4413b0ff206b0fc19f0cc998732c6b9590d504d5639b7ebbf3fccc833` | `tests/test_fixtures.py` |
+| `record-withdrawn.signed.json` | the wrapper's `sign`, as above | `capture_records.py` | 2026-10-03 | `cbc91d561707f1e10034ff01a5cd587fb52276bae79f626665b14aa8d4bf5a9b` | `tests/test_fixtures.py` |
+| `record-withdrawn.withdrawal.json` | the wrapper's `withdraw` of that record, same key | `capture_records.py` | 2026-10-03 | `42bfe9b0ee86ba5b219c62a472a1d0e8ee45b5191fc7a7dd8cde842b69859a2e` | `tests/test_fixtures.py` |
+| `record-withdrawn.bundle.json` | the wrapper's `view` of the record with the withdrawal | `capture_records.py` | 2026-10-03 | `33b608d24e36beca3314fde938513252380e2ffbeaff3312e4dcb4f58482d2eb` | `tests/test_fixtures.py` |
+| `record-withdrawn.verify.json` | the wrapper's `verify` (`--json`) of the bundle | `capture_records.py` | 2026-10-03 | `8b882a0bc06300add88b5186b11861279a1f6505f80344d1c279aa1eaa3ad4ef` | `tests/test_fixtures.py` |
 
 - **`badge-golden.json`** holds six bundle URLs, each with what host-core's own
   `buildVerifyHref(CANONICAL_ORIGIN, url)` and `buildEmbedMarkdown(CANONICAL_ORIGIN, url)`
@@ -40,3 +47,21 @@ captured once and committed. A test pins each one's SHA-256 too.
   Node 24 (which strips the file's types) a module that imports `buildVerifyHref`,
   `buildEmbedMarkdown` and `CANONICAL_ORIGIN` from `./links.ts`, maps the six URLs to
   `{url, verify, markdown}`, and prints `JSON.stringify({ cases }, null, 1)` and a newline.
+
+- **`record-*.json`** are two records signed through the wrapper under a throwaway seed, generated
+  for the capture and never stored: an active analysis notebook (a synthetic notebook with the
+  badge cell and the comparison cell, role `analysis`) and a claim (role `claim`), withdrawn by
+  the same key with a stated reason. Each carries a `vcsRef` to a fictional repository and its
+  role under `extensions`. The command, run from the repository root on 2026-10-03 with Node
+  24.21.0 and the vendored CLI 0.2.0:
+
+  ```sh
+  TYPEDSTANDARDS_SIGNING_SEED_B64="$(openssl rand -base64 32)" uv run python tests/fixtures/capture_records.py
+  ```
+
+  A new run signs with a new key, so it writes different signatures, `did:key`s and hashes, and
+  the pinned SHA-256s must be updated with it. The documents carry the throwaway key's public
+  `did:key`, which `.gitleaks.toml` allows. `tests/test_fixtures.py` checks that the vendored CLI's
+  `verify --json` of each bundle still equals the captured document; `tests/test_sidecar.py` builds
+  a fresh `view` from each `*.signed.json` through the CLI; `tests/test_show.py` renders from the
+  captured bundles and `verify` documents without Node.

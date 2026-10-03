@@ -1,0 +1,30 @@
+{
+ "node": {
+  "metadata": {
+   "schemaVersion": "0.1.0",
+   "packageId": "5a1d9c3e-7b20-4e8f-a6d4-2c9b0e1f3a57",
+   "createdAt": "2026-10-03T12:30:00.000Z",
+   "signingKeyId": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+  },
+  "type": "attestation/withdraws/v1",
+  "signer": {
+   "bindingTier": "pseudonymous",
+   "displayName": "Example analyst",
+   "identifier": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+  },
+  "targetNodeId": "cba7829c5b6374f760b9558227e2a9faccfdb457d104016d95a5acc4923423ab",
+  "contentCanonicalization": "https://typedstandards.org/canonicalization/legacy-json/v1",
+  "reason": "The claim compared periods of different lengths; a restatement replaces it.",
+  "effectiveAt": "2026-10-03T12:30:00.000Z",
+  "contentHash": {
+   "sha256": "412e4124e1a61a2e259c5350a8efecd0b9b851a8eaa0925654884ef75cf66174"
+  }
+ },
+ "nodeId": "f9c3bcea58a9407f453a5b102283f8eb79bb643bbbdb731648c7a2d7cec60044",
+ "signature": {
+  "signature": "cGDO7H8AiyvdudFeiBTj4EsMKOQshCK9tRnhvORFKr1HBoIcyqN8cTQfHQ27+iSga/tTv3uvO2ombi0xBKXLAw==",
+  "publicKey": "MCowBQYDK2VwAyEA3qfVxXXRaXMS9un5GWm9HIHD8vKfhf3IV6GENrN/eKM=",
+  "algorithm": "Ed25519ph",
+  "kid": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+ }
+}

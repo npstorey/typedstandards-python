@@ -13,6 +13,7 @@ from ._cli import run as _run
 from ._commands import attest, sign, verify, view, withdraw
 from ._comparison import comparison_cell
 from ._node import NODE_FLOOR, NODE_OVERRIDE, locate_node
+from ._sidecar import sidecar
 from .errors import (
     CliError,
     CliNotVendoredError,
@@ -55,6 +56,7 @@ __all__ = [
     "comparison_cell",
     "locate_node",
     "pin",
+    "sidecar",
     "sign",
     "verify",
     "view",

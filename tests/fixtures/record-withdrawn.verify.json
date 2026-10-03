@@ -1,0 +1,120 @@
+{
+ "ok": true,
+ "nodeId": "cba7829c5b6374f760b9558227e2a9faccfdb457d104016d95a5acc4923423ab",
+ "failures": [],
+ "checks": {
+  "hashMatch": true,
+  "envelopeIntegrity": {
+   "status": "verified"
+  },
+  "recomputedHash": "cba7829c5b6374f760b9558227e2a9faccfdb457d104016d95a5acc4923423ab",
+  "nodeId": "cba7829c5b6374f760b9558227e2a9faccfdb457d104016d95a5acc4923423ab",
+  "signatureValid": true,
+  "kid": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn",
+  "hasSigning": true,
+  "rekorVerified": null,
+  "rekorDetails": null,
+  "rekorInclusion": null,
+  "hasRekor": false,
+  "hasTimestamp": false,
+  "rfc3161": null,
+  "keyTrust": {
+   "status": "self_certified",
+   "verified": false,
+   "kid": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+  },
+  "blobRefsVerified": null,
+  "blobRefs": [],
+  "contentCanonicalization": {
+   "status": "ok",
+   "rule": "https://typedstandards.org/canonicalization/raw-bytes/v1"
+  },
+  "contentHash": {
+   "status": "ok",
+   "algorithms": [
+    "sha256"
+   ],
+   "matched": "sha256",
+   "contentHash": {
+    "sha256": "5e1d84bd5e11836479fc3749bd8e167310e1199dbd65bf64b5e6223b1dbc8522"
+   }
+  },
+  "typeResolution": {
+   "status": "ok",
+   "type": "content/analysis/v1"
+  },
+  "signerIdentity": {
+   "status": "key_derived_match",
+   "claimed": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn",
+   "derived": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+  },
+  "signingKeyIdConsistency": {
+   "status": "ok"
+  },
+  "captureMethodVocab": {
+   "status": "ok",
+   "captureMethod": "script-run",
+   "profileType": "scripted-recomputation"
+  },
+  "contentProfile": {
+   "status": "contentProfile_absent",
+   "producerProfile": "scripted-recomputation/example"
+  },
+  "lifecycle": {
+   "status": "withdrawn",
+   "source": "attestation-chain",
+   "chain": [
+    {
+     "nodeId": "f9c3bcea58a9407f453a5b102283f8eb79bb643bbbdb731648c7a2d7cec60044",
+     "type": "attestation/withdraws/v1",
+     "signer": {
+      "bindingTier": "pseudonymous",
+      "displayName": "Example analyst",
+      "identifier": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+     },
+     "createdAt": "2026-10-03T12:30:00.000Z",
+     "reason": "The claim compared periods of different lengths; a restatement replaces it.",
+     "effectiveAt": "2026-10-03T12:30:00.000Z",
+     "signatureValid": true,
+     "nodeIdMatches": true,
+     "hasTimestamp": false,
+     "hasRekor": false,
+     "signerMatchesTarget": true,
+     "keyBound": true,
+     "namesTarget": true,
+     "missingFields": []
+    }
+   ],
+   "withdrawnAt": "2026-10-03T12:30:00.000Z",
+   "withdrawnReason": "The claim compared periods of different lengths; a restatement replaces it."
+  }
+ },
+ "lifecycle": {
+  "status": "withdrawn",
+  "source": "attestation-chain",
+  "chain": [
+   {
+    "nodeId": "f9c3bcea58a9407f453a5b102283f8eb79bb643bbbdb731648c7a2d7cec60044",
+    "type": "attestation/withdraws/v1",
+    "signer": {
+     "bindingTier": "pseudonymous",
+     "displayName": "Example analyst",
+     "identifier": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+    },
+    "createdAt": "2026-10-03T12:30:00.000Z",
+    "reason": "The claim compared periods of different lengths; a restatement replaces it.",
+    "effectiveAt": "2026-10-03T12:30:00.000Z",
+    "signatureValid": true,
+    "nodeIdMatches": true,
+    "hasTimestamp": false,
+    "hasRekor": false,
+    "signerMatchesTarget": true,
+    "keyBound": true,
+    "namesTarget": true,
+    "missingFields": []
+   }
+  ],
+  "withdrawnAt": "2026-10-03T12:30:00.000Z",
+  "withdrawnReason": "The claim compared periods of different lengths; a restatement replaces it."
+ }
+}

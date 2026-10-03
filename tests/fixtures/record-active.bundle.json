@@ -1,0 +1,79 @@
+{
+ "protocolVersion": "0.1.0",
+ "packageHash": "a171d1ab156d578ecabae1722f5602f0fde77757e22aae07cfa67cbdf77fd963",
+ "visibility": "public",
+ "captureMethod": "script-run",
+ "contentProfile": "default",
+ "producerProfile": "scripted-recomputation/example",
+ "type": "content/analysis/v1",
+ "signer": {
+  "bindingTier": "pseudonymous",
+  "displayName": "Example analyst",
+  "identifier": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+ },
+ "contentHash": {
+  "sha256": "fa89d5ea2a270f75af92cc095c41c107bee2a2fbc8cb887b52bcc7e6e6a22645"
+ },
+ "contentCanonicalization": "https://typedstandards.org/canonicalization/raw-bytes/v1",
+ "signature": {
+  "signature": "XvAJN/+6Ay0In3J6WtHC9WQXUUA+4PCUKERd0nzHb6+JxMHPFA/g30yfKzVeqqRK2hWn4LmCxF5rKJbg8nvyCQ==",
+  "publicKey": "MCowBQYDK2VwAyEA3qfVxXXRaXMS9un5GWm9HIHD8vKfhf3IV6GENrN/eKM=",
+  "algorithm": "Ed25519ph",
+  "kid": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+ },
+ "subjectTitle": "Example analysis",
+ "subjectSummary": "An example analysis notebook, executed end to end.",
+ "package": {
+  "metadata": {
+   "schemaVersion": "0.1.0",
+   "packageId": "6f9e2a54-6d1c-4f1e-9a52-3c7d1f0b8e21",
+   "createdAt": "2026-10-03T12:05:00.000Z",
+   "signingKeyId": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn",
+   "captureMethod": "script-run"
+  },
+  "producerProfile": "scripted-recomputation/example",
+  "type": "content/analysis/v1",
+  "signer": {
+   "bindingTier": "pseudonymous",
+   "displayName": "Example analyst",
+   "identifier": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+  },
+  "vcsRef": {
+   "repoUrl": "https://git.example.com/example/analysis",
+   "commitSha": "0123456789abcdef0123456789abcdef01234567",
+   "ref": "refs/heads/main",
+   "path": "notebooks/analysis.ipynb"
+  },
+  "contentCanonicalization": "https://typedstandards.org/canonicalization/raw-bytes/v1",
+  "prompt": {
+   "hash": "46da256c80af2a74594076f33694665b508d5c485abbfcc3f55030f247613226",
+   "visibility": "full_text",
+   "text": "Run the example notebook end to end and record its output."
+  },
+  "queries": [
+   {
+    "tool": "jupyter nbconvert --execute",
+    "operationType": "script-run",
+    "arguments": {
+     "notebook": "x"
+    }
+   }
+  ],
+  "dataSources": [],
+  "cost": {
+   "model": "none"
+  },
+  "skillMetadata": {},
+  "output": "{\n \"cells\": [\n  {\n   \"cell_type\": \"markdown\",\n   \"id\": \"typedstandards-badge\",\n   \"metadata\": {},\n   \"source\": [\n    \"[![Verify this record with Typed Standards](https://typedstandards.org/badge/typed-standards-verify.svg)](<https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2Fbundles%2Fanalysis.bundle.json>)\\n\",\n    \"\\n\",\n    \"| Typed Standards record | |\\n\",\n    \"|---|---|\\n\",\n    \"| Host | `records.example.org` |\\n\",\n    \"| Capture method | `script-run` |\\n\",\n    \"\\n\",\n    \"This cell is a reader affordance and is not authoritative: verification reads the signed record, not this cell, and the verifier shows the record's signer, hash and time.\\n\"\n   ]\n  },\n  {\n   \"cell_type\": \"markdown\",\n   \"id\": \"intro\",\n   \"metadata\": {},\n   \"source\": [\n    \"# Example analysis\\n\",\n    \"\\n\",\n    \"Résumé of the method — café 実験.\\n\"\n   ]\n  },\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": 1,\n   \"id\": \"load\",\n   \"metadata\": {\n    \"tags\": [\n     \"parameters\"\n    ]\n   },\n   \"outputs\": [\n    {\n     \"name\": \"stdout\",\n     \"output_type\": \"stream\",\n     \"text\": [\n      \"1.50\\n\"\n     ]\n    }\n   ],\n   \"source\": [\n    \"total = 1.50\\n\",\n    \"print(f'{total:.2f}')\"\n   ]\n  },\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": null,\n   \"id\": \"plot\",\n   \"metadata\": {},\n   \"outputs\": [],\n   \"source\": [\n    \"values = [1e-3, 2.0, -0.0]\"\n   ]\n  },\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": null,\n   \"id\": \"typedstandards-comparison\",\n   \"metadata\": {},\n   \"outputs\": [],\n   \"source\": [\n    \"# ORIGINAL VALUES (captured at executedAt = 2026-10-03T12:00:00Z)\\n\",\n    \"original = {\\n\",\n    \"    \\\"total\\\": 1.5,\\n\",\n    \"}\\n\",\n    \"\\n\",\n    \"# CURRENT VALUES (re-computed against live data using the same helpers + queries above)\\n\",\n    \"current = recompute_key_metrics()\\n\",\n    \"\\n\",\n    \"# DELTAS\\n\",\n    \"for k in original:\\n\",\n    \"    delta = (current[k] - original[k]) if isinstance(original[k], (int, float)) else (original[k], current[k])\\n\",\n    \"    print(f\\\"{k}: original={original[k]}, current={current[k]}, delta={delta}\\\")\\n\"\n   ]\n  }\n ],\n \"metadata\": {\n  \"kernelspec\": {\n   \"display_name\": \"Python 3\",\n   \"language\": \"python\",\n   \"name\": \"python3\"\n  },\n  \"language_info\": {\n   \"name\": \"python\",\n   \"version\": \"3.12.0\"\n  }\n },\n \"nbformat\": 4,\n \"nbformat_minor\": 5\n}\n",
+  "trace": {
+   "resourceSpans": []
+  },
+  "summary": "An example analysis notebook, executed end to end.",
+  "extensions": {
+   "role": "analysis"
+  },
+  "contentHash": {
+   "sha256": "fa89d5ea2a270f75af92cc095c41c107bee2a2fbc8cb887b52bcc7e6e6a22645"
+  }
+ }
+}

@@ -1,0 +1,62 @@
+{
+ "package": {
+  "metadata": {
+   "schemaVersion": "0.1.0",
+   "packageId": "0b3c8d7e-2f41-4a9b-8c65-91d2e4f7a3b0",
+   "createdAt": "2026-10-03T12:06:00.000Z",
+   "signingKeyId": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn",
+   "captureMethod": "script-run"
+  },
+  "producerProfile": "scripted-recomputation/example",
+  "type": "content/analysis/v1",
+  "signer": {
+   "bindingTier": "pseudonymous",
+   "displayName": "Example analyst",
+   "identifier": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+  },
+  "vcsRef": {
+   "repoUrl": "https://git.example.com/example/analysis",
+   "commitSha": "0123456789abcdef0123456789abcdef01234567",
+   "ref": "refs/heads/main",
+   "path": "claims/median-fare.md"
+  },
+  "contentCanonicalization": "https://typedstandards.org/canonicalization/raw-bytes/v1",
+  "prompt": {
+   "hash": "46da256c80af2a74594076f33694665b508d5c485abbfcc3f55030f247613226",
+   "visibility": "full_text",
+   "text": "Run the example notebook end to end and record its output."
+  },
+  "queries": [
+   {
+    "tool": "jupyter nbconvert --execute",
+    "operationType": "script-run",
+    "arguments": {
+     "notebook": "x"
+    }
+   }
+  ],
+  "dataSources": [],
+  "cost": {
+   "model": "none"
+  },
+  "skillMetadata": {},
+  "output": "The median fare rose by 4 percent between the two periods.\n",
+  "trace": {
+   "resourceSpans": []
+  },
+  "summary": "An example claim drawn from the analysis notebook.",
+  "extensions": {
+   "role": "claim"
+  },
+  "contentHash": {
+   "sha256": "5e1d84bd5e11836479fc3749bd8e167310e1199dbd65bf64b5e6223b1dbc8522"
+  }
+ },
+ "envelopeHash": "cba7829c5b6374f760b9558227e2a9faccfdb457d104016d95a5acc4923423ab",
+ "signature": {
+  "signature": "xXfyPAhztpEcaRf8Hs6WZZI1yqsdCrRkGagWw1FO6ZHk2FG7tL5RPttaCjQhWGofAZYdvho6C7r+aYRACH5FBg==",
+  "publicKey": "MCowBQYDK2VwAyEA3qfVxXXRaXMS9un5GWm9HIHD8vKfhf3IV6GENrN/eKM=",
+  "algorithm": "Ed25519ph",
+  "kid": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+ }
+}
