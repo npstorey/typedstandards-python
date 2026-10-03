@@ -67,7 +67,13 @@ def test_exit_3_an_unset_seed(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_exit_3_a_malformed_seed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(SEED_VARIABLE, "not a seed")
     with pytest.raises(SeedError) as caught:
-        typedstandards.withdraw({"targetNodeId": "a" * 64, "reason": "r", "signer": {"bindingTier": "pseudonymous"}})
+        typedstandards.withdraw(
+            {
+                "targetNodeId": "a" * 64,
+                "reason": "r",
+                "signer": {"bindingTier": "pseudonymous", "displayName": "Example"},
+            }
+        )
     assert caught.value.exit_code == 3
 
 

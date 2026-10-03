@@ -110,6 +110,27 @@ def view(
         return run("view", args)
 
 
+def _without_trust_registry(value: Input) -> Input:
+    """G0 D9 = A, typedstandards#136: CLI 0.2.0's verify exits 2 on a bundle's top-level
+    ``trustRegistry``, which host-core inlines in every bundle it serves under a registry. Drop that
+    one key from a bundle (a document with ``packageHash``) and change nothing else; any other
+    document, and a bundle file without the key, reach the CLI as given.
+
+    Remove this workaround when the wrapper pins a CLI whose verify accepts the key.
+    """
+    document: Any = value
+    if not isinstance(value, Mapping):
+        if not isinstance(value, (str, os.PathLike)):
+            return value
+        try:
+            document = json.loads(Path(value).read_bytes())
+        except (OSError, ValueError):
+            return value  # the CLI reports an unreadable or malformed file
+    if isinstance(document, Mapping) and "packageHash" in document and "trustRegistry" in document:
+        return {key: item for key, item in document.items() if key != "trustRegistry"}
+    return value
+
+
 def verify(
     input: Input,
     *,
@@ -122,11 +143,12 @@ def verify(
     (``checks``) and the lifecycle resolution (``lifecycle``) beside ``ok``, ``nodeId`` and
     ``failures``. ``blobs`` are local files for the record's BlobRefs. A record that does not
     verify raises :class:`~typedstandards.errors.VerificationError`, whose ``document`` is the
-    verdict.
+    verdict. A bundle's top-level ``trustRegistry`` is dropped before the CLI sees it
+    (typedstandards#136); nothing else is changed.
     """
     if isinstance(blobs, (str, os.PathLike)):
         raise TypeError("blobs takes a list of paths, not one")
-    args, stdin = _input_args(input, "--input")
+    args, stdin = _input_args(_without_trust_registry(input), "--input")
     for blob in blobs:
         args += ["--blob", os.fspath(blob)]
     if full:

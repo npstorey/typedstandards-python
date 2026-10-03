@@ -128,9 +128,18 @@ def test_mapping_input_goes_on_stdin(seed: str, spawned: list[dict[str, Any]]) -
 
 
 def test_success_diagnostics_are_logged(seed: str, caplog: pytest.LogCaptureFixture) -> None:
+    """An attention reading the CLI prints on stderr with exit 0 is logged, not lost."""
+    signed = typedstandards.sign(self_certifying_input())
     with caplog.at_level(logging.INFO, logger="typedstandards"):
-        typedstandards.sign(self_certifying_input())
-    assert "registry_unavailable (attention)" in caplog.text
+        typedstandards.attest(
+            {
+                "type": "attestation/corroborates/v1",
+                "targetNodeId": signed["envelopeHash"],
+                "scope": "the whole record",
+                "signer": {"bindingTier": "platform", "identifier": "platform:example", "displayName": "Example"},
+            }
+        )
+    assert "authorization: key_unbound (attention)" in caplog.text
 
 
 @pytest.mark.parametrize("bad", [42, b"{}", ["a"]])
