@@ -126,12 +126,23 @@ def test_every_child_inherits_the_environment(seed: str, spawned: list[dict[str,
     entry = str(typedstandards.cli_entry())
     commands = {call["args"][2] for call in spawned if len(call["args"]) > 2 and call["args"][1] == entry}
     assert commands == {"sign", "withdraw", "attest", "view", "verify", "--version"}
+    # Failures name keys and argv only: a failing assertion's repr would otherwise print the
+    # environment, which in a developer's shell or a CI runner can hold real secrets.
     for call in spawned:
-        assert "env" not in call["kwargs"], f"env= passed to {call['args']}"
-        assert call["environ"] == before, f"the environment changed before {call['args']}"
-        assert seed not in " ".join(call["args"]), "the seed reached an argument"
-        assert call["stdin"] is None or seed.encode() not in call["stdin"], "the seed reached stdin"
-    assert dict(os.environ) == before
+        if "env" in call["kwargs"]:
+            pytest.fail(f"env= passed to {call['args']}")
+        if call["environ"] != before:
+            pytest.fail(f"the environment changed before {call['args']}: {_changed_keys(before, call['environ'])}")
+        if seed in " ".join(call["args"]):
+            pytest.fail("the seed reached an argument")
+        if call["stdin"] is not None and seed.encode() in call["stdin"]:
+            pytest.fail("the seed reached stdin")
+    if dict(os.environ) != before:
+        pytest.fail(f"the environment changed: {_changed_keys(before, dict(os.environ))}")
+
+
+def _changed_keys(before: dict[str, str], after: dict[str, str]) -> list[str]:
+    return sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
 
 
 class RecordingEnviron(MutableMapping[str, str]):
@@ -176,5 +187,7 @@ def test_wrapper_never_reads_the_seed_variable(seed: str, monkeypatch: pytest.Mo
     recorder = RecordingEnviron(os.environ)
     monkeypatch.setattr(os, "environ", recorder)
     _drive_every_command()
-    assert SEED_VARIABLE not in recorder.keys_read
-    assert not recorder.read_all, "the whole environment was read"
+    if SEED_VARIABLE in recorder.keys_read:
+        pytest.fail(f"the wrapper read {SEED_VARIABLE}")
+    if recorder.read_all:
+        pytest.fail("the wrapper read the whole environment")
