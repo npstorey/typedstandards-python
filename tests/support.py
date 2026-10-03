@@ -66,3 +66,7 @@ def write_stub(directory: Path, name: str, version: str, exit_code: int = 4, std
     )
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return path
+
+
+class NetworkBlocked(RuntimeError):
+    """Raised by conftest.py's autouse guard when a test opens a connection or binds a port."""
