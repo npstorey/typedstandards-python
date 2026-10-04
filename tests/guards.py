@@ -4,7 +4,8 @@
 - It passes the child process no environment but the inherited one: no ``env=`` on any call,
   and nothing that sets, unsets or replaces a variable for a child.
 - It computes none of the format's hashes: no module imports ``hashlib`` (or the modules behind
-  it), except the allowlisted P2 ``pin`` module, whose digest is a signed assertion.
+  it) or reaches one another way (a re-import from ``pin``, ``pin.hashlib``, ``sys.modules``, a
+  built import name), except the allowlisted ``pin`` module, whose digest is a signed assertion.
 
 Each scanner takes a directory and returns one line per offence, so a test can drive it over the
 package and over a fixture tree of offenders.
@@ -119,8 +120,22 @@ def env_overrides(root: Path) -> list[str]:
     return found
 
 
+def _is_sys_modules(node: ast.AST) -> bool:
+    return (isinstance(node, ast.Attribute) and node.attr == "modules") or (
+        isinstance(node, ast.Name) and node.id == "modules"
+    )
+
+
+def _digest_name(value: object) -> bool:
+    return isinstance(value, str) and value.split(".")[0] in HASH_MODULES
+
+
 def hash_imports(root: Path, allow: frozenset[str] = HASH_ALLOWLIST) -> list[str]:
-    """Every import of a digest module outside the allowlist, static or dynamic."""
+    """Every route to a digest module outside the allowlist: an import of one (static, or dynamic
+    with a literal name); any reference to one's name (a name, an attribute such as
+    ``pin.hashlib``, an imported alias such as ``from .pin import hashlib``, a string naming it);
+    a ``sys.modules`` lookup that names one or is not a literal; and ``import_module`` or
+    ``__import__`` with a name that is not a literal, since it can build any name."""
     found = []
     for path in python_files(root):
         where = path.relative_to(root)
@@ -128,16 +143,34 @@ def hash_imports(root: Path, allow: frozenset[str] = HASH_ALLOWLIST) -> list[str
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            modules: list[str] = []
+            line = getattr(node, "lineno", 0)
             if isinstance(node, ast.Import):
-                modules = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                modules = [node.module]
+                for alias in node.names:
+                    if _digest_name(alias.name):
+                        found.append(f"{where}:{line}: imports {alias.name}")
+            elif isinstance(node, ast.ImportFrom):
+                if _digest_name(node.module or ""):
+                    found.append(f"{where}:{line}: imports {node.module}")
+                for alias in node.names:
+                    if _digest_name(alias.name):
+                        found.append(f"{where}:{line}: imports the name {alias.name} from {node.module or '.'}")
             elif isinstance(node, ast.Call) and _call_name(node) in {"import_module", "__import__"} and node.args:
                 first = node.args[0]
-                if isinstance(first, ast.Constant) and isinstance(first.value, str):
-                    modules = [first.value]
-            for module in modules:
-                if module.split(".")[0] in HASH_MODULES:
-                    found.append(f"{where}:{node.lineno}: imports {module}")
-    return found
+                if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+                    found.append(f"{where}:{line}: {_call_name(node)} with a name that is not a literal")
+                elif _digest_name(first.value):
+                    found.append(f"{where}:{line}: imports {first.value}")
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get":
+                if _is_sys_modules(node.func.value):
+                    found.append(f"{where}:{line}: looks up sys.modules")
+            elif isinstance(node, ast.Subscript) and _is_sys_modules(node.value):
+                key = node.slice
+                if not (isinstance(key, ast.Constant) and isinstance(key.value, str)) or _digest_name(key.value):
+                    found.append(f"{where}:{line}: looks up sys.modules")
+            elif isinstance(node, ast.Name) and _digest_name(node.id):
+                found.append(f"{where}:{line}: refers to {node.id}")
+            elif isinstance(node, ast.Attribute) and _digest_name(node.attr):
+                found.append(f"{where}:{line}: refers to .{node.attr}")
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in HASH_MODULES:
+                found.append(f"{where}:{line}: names {node.value}")
+    return sorted(set(found))
