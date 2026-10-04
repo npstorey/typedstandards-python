@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 import re
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 from ._notebook import insert_cell, source_lines
 
@@ -71,25 +71,33 @@ def _check_fact(name: str, value: str) -> str:
     return value.strip()
 
 
-def refuse_hash_or_time(text: str) -> str:
+def refuse_hash_or_time(text: str, *, authorities: tuple[str, ...] = ()) -> str:
     """Raise ``ValueError`` when ``text`` holds a 64-hex string, a date or a time of day.
 
     The badge cell is part of the signed bytes, written before signing: a hash in it cannot be
     the record's own, and a time in it cannot be the signing time, so either would mislead.
+    Each of ``authorities`` (a URL's host and port, as the text carries them) is left out of the
+    date and time check, so ``192.168.1.10:8080`` is not read as the time ``10:80``.
     """
     if _HEX64.search(text):
         raise ValueError(
             "the badge cell would carry a 64-hex string; it is written before signing, so it names no hash"
         )
-    if _DATE_OR_TIME.search(text):
+    scan = text
+    for authority in authorities:
+        if authority:
+            scan = scan.replace(authority, " ")
+    if _DATE_OR_TIME.search(scan):
         raise ValueError("the badge cell would carry a date or time; it is written before signing, so it names no time")
     return text
 
 
 def badge_text(bundle_url: str, *, capture_method: str, host: str | None = None) -> str:
     """The badge cell's Markdown: the badge, a two-row table (host, capture method), one sentence."""
+    url = bundle_url.strip()
+    parts = urlsplit(url)
     if host is None:
-        host = urlsplit(bundle_url.strip()).netloc
+        host = parts.netloc
     host = _check_fact("host", host)
     capture_method = _check_fact("capture_method", capture_method)
     text = (
@@ -103,7 +111,11 @@ def badge_text(bundle_url: str, *, capture_method: str, host: str | None = None)
         "This cell is a reader affordance and is not authoritative: verification reads the signed record, "
         "not this cell, and the verifier shows the record's signer, hash and time.\n"
     )
-    return refuse_hash_or_time(text)
+    # The cell carries the URL percent-encoded, which hides a time's ":"; so the URL past its
+    # authority (path, query, fragment) is checked as written and decoded too.
+    rest = url[len(parts.scheme) + 3 + len(parts.netloc) :]
+    refuse_hash_or_time(f"{rest}\n{unquote(rest)}")
+    return refuse_hash_or_time(text, authorities=(f"`{host}`", encode_uri_component(parts.netloc)))
 
 
 def _marimo_source(markdown: str) -> str:

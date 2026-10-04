@@ -70,6 +70,11 @@ OFFENDERS = {
     "hash_dynamic.py": "import importlib\nh = importlib.import_module('hashlib')\n",
     "hash_hmac.py": "import hmac\n",
     "pin.py": "import hashlib\n",
+    # Re-import routes (the cold read's four), each outside the allowlist.
+    "reimport_from_pin.py": "from .pin import hashlib\n",
+    "pin_attribute.py": "from . import pin\ndigest = pin.hashlib.sha256(b'x')\n",
+    "sys_modules.py": "import sys\ndigest = sys.modules['hashlib'].sha256(b'x')\n",
+    "dynamic_name.py": "import importlib\nmodule = importlib.import_module('hash' + 'lib')\n",
 }
 
 
@@ -100,7 +105,16 @@ def test_env_scanner_fails_on_offenders(offenders: Path) -> None:
 
 
 def test_hash_scanner_fails_on_offenders_and_allows_only_pin(offenders: Path) -> None:
-    assert _files(hash_imports(offenders)) == {"hash_import.py", "hash_from.py", "hash_dynamic.py", "hash_hmac.py"}
+    assert _files(hash_imports(offenders)) == {
+        "hash_import.py",
+        "hash_from.py",
+        "hash_dynamic.py",
+        "hash_hmac.py",
+        "reimport_from_pin.py",
+        "pin_attribute.py",
+        "sys_modules.py",
+        "dynamic_name.py",
+    }
     assert "pin.py" in _files(hash_imports(offenders, allow=frozenset()))
 
 
@@ -123,6 +137,60 @@ def _drive_every_command() -> None:
     bundle = typedstandards.view(signed, visibility="public", attestations=[withdrawal])
     typedstandards.verify(bundle)
     typedstandards.cli_version()
+
+
+DIGEST_CONSTRUCTORS = (
+    "new", "md5", "sha1", "sha224", "sha256", "sha384", "sha512", "sha3_224", "sha3_256", "sha3_384",
+    "sha3_512", "shake_128", "shake_256", "blake2b", "blake2s",
+)  # fmt: skip
+
+
+def test_no_module_but_pin_computes_a_digest_at_run_time(
+    seed: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """While the five commands and every helper run, record each hashlib constructor call by the
+    module of the frame that made it. Only typedstandards.pin may appear; third-party libraries
+    (httpx, yaml) hashing internally are not typedstandards frames and are not counted."""
+    import hashlib
+    import sys
+
+    import httpx
+    from support import analysis_input, synthetic_notebook
+
+    callers: list[str] = []
+
+    def recording(name: str, real: Any) -> Any:
+        def call(*args: Any, **kwargs: Any) -> Any:
+            caller = sys._getframe(1).f_globals.get("__name__", "")
+            if caller == "typedstandards" or caller.startswith("typedstandards."):
+                callers.append(f"{caller} called hashlib.{name}")
+            return real(*args, **kwargs)
+
+        return call
+
+    for name in DIGEST_CONSTRUCTORS:
+        monkeypatch.setattr(hashlib, name, recording(name, getattr(hashlib, name)))
+
+    _drive_every_command()
+    notebook = tmp_path / "analysis.ipynb"
+    notebook.write_text(synthetic_notebook(), encoding="utf-8")
+    typedstandards.badge_cell(
+        "https://records.example.org/bundles/analysis.bundle.json", capture_method="script-run", notebook=notebook
+    )
+    typedstandards.comparison_cell(notebook, {"rows": 1}, recompute="recompute()", captured_at="2026-10-04T00:00:00Z")
+    _, entry = typedstandards.pin(
+        "https://files.example.org/data.csv", transport=httpx.MockTransport(lambda r: httpx.Response(200, content=b"x"))
+    )
+    signed = typedstandards.sign(analysis_input(queries=[entry]), output_file=notebook)
+    bundle = typedstandards.view(signed, visibility="public")
+    typedstandards.sidecar(bundle, notebook)
+    typedstandards.show(bundle)
+    typedstandards.show(bundle, typedstandards.verify(bundle), marimo=True)
+
+    assert "typedstandards.pin called hashlib.sha256" in callers  # the recorder sees pin's one digest
+    others = sorted({c for c in callers if not c.startswith("typedstandards.pin ")})
+    if others:
+        pytest.fail(f"a module other than pin computed a digest: {others}")
 
 
 def test_every_child_inherits_the_environment(seed: str, spawned: list[dict[str, Any]]) -> None:

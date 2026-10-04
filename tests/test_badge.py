@@ -181,6 +181,37 @@ def test_a_url_carrying_a_hash_or_date_is_refused(tmp_path: Path, url: str) -> N
     assert _read(path) == original
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://192.168.1.10:8080/bundles/a.bundle.json",
+        "https://records.example.org:8443/a.bundle.json",
+        "http://127.0.0.1:12345/bundles/a.bundle.json",
+    ],
+)
+def test_a_host_with_a_port_is_not_read_as_a_time(tmp_path: Path, url: str) -> None:
+    path = _write(tmp_path, synthetic_notebook())
+    text = badge_cell(url, capture_method="script-run", notebook=path)
+    assert text.splitlines()[0] == badge_markdown(url)
+    assert json.loads(_read(path))["cells"][0]["id"] == "typedstandards-badge"
+
+
+@pytest.mark.parametrize(
+    ("url", "capture_method"),
+    [
+        ("https://192.168.1.10:8080/2026-10-04/a.bundle.json", "script-run"),
+        ("https://records.example.org:8443/a.bundle.json?t=12:30", "script-run"),
+        ("https://records.example.org/a.bundle.json?t=12%3A30%3A45", "script-run"),
+        ("https://records.example.org/a.bundle.json#T12:30", "script-run"),
+        ("https://192.168.1.10:8080/a.bundle.json", "run-T12:30:45"),
+    ],
+    ids=["date-in-path", "time-in-query", "encoded-time-in-query", "time-in-fragment", "time-in-fact"],
+)
+def test_a_date_or_time_beside_a_port_is_still_refused(url: str, capture_method: str) -> None:
+    with pytest.raises(ValueError, match="date or time"):
+        badge_cell(url, capture_method=capture_method)
+
+
 def test_a_second_badge_is_refused(tmp_path: Path) -> None:
     path = _write(tmp_path, synthetic_notebook())
     badge_cell(BUNDLE_URL, capture_method="script-run", notebook=path)
