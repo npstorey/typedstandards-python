@@ -160,8 +160,13 @@ PY
   rm -rf "$tmp"
   (cd "$DIST" && shasum -a 256 "$SDIST" "$WHEEL" > SHA256SUMS)
   git rev-parse HEAD > "$DIST/COMMIT"
-  # Without a token, uv publish --dry-run still checks the files and the command line.
+  # uv publish --dry-run checks the files and the command line, and sends nothing. Its output says
+  # "Uploading" all the same, so the dry run then shows PyPI still without this version.
+  say "uv publish --dry-run (its output says \"Uploading\"; it sends nothing):"
   env -u UV_PUBLISH_TOKEN uv publish --dry-run --token dry-run "$DIST/$SDIST" "$DIST/$WHEEL"
+  status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$PYPI/pypi/$PACKAGE/$VERSION/json")"
+  [ "$status" = "404" ] || die "after the dry run PyPI answers $status for $PACKAGE $VERSION, not 404; stop and check"
+  say "PyPI still answers 404 for $PACKAGE $VERSION"
   say "built and checked, at $(cat "$DIST/COMMIT"):"
   sed 's/^/publish:   /' "$DIST/SHA256SUMS"
   say "DRY_RUN: nothing was uploaded. To upload these two files:"
