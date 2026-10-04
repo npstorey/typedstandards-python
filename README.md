@@ -22,8 +22,11 @@ The wrapper looks for Node in this order:
 1. `TYPEDSTANDARDS_NODE`, when set: the path (or name on `PATH`) of a Node binary;
 2. `node` on `PATH`.
 
-With no Node, or one older than 20.19.0, every call raises `typedstandards.NodeLocatorError`, whose
-message names the floor and `TYPEDSTANDARDS_NODE`.
+Only the calls that run the CLI need Node: `sign`, `withdraw`, `attest`, `view`, `verify`,
+`cli_version()`, and `show` without a precomputed result. With no Node, or one older than 20.19.0,
+each of those raises `typedstandards.NodeLocatorError`, whose message names the floor and
+`TYPEDSTANDARDS_NODE`. `pin`, `badge_cell`, `comparison_cell`, `sidecar` and
+`show(record, result)` run without Node.
 
 Linux and macOS are tested. Windows is untested.
 
@@ -162,7 +165,8 @@ ts.show(bundle)  # in Jupyter; ts.show(bundle, marimo=True) in Marimo
   `typedstandards-badge` on nbformat 4.5). With `marimo=True`, it returns the source of a
   `mo.md(...)` cell to paste into the app. The cell is written before signing and is part of the
   signed bytes, so it names no hash and no time; a URL or value holding a 64-hex string, a date or
-  a time is refused.
+  a time is refused. The URL's host and port are not read as a time (`192.168.1.10:8080` is
+  accepted).
 - **`comparison_cell(notebook, values, *, recompute, captured_at)`** appends the comparison cell
   of spec §8.7.4 as the last cell (id `typedstandards-comparison`): the values as Python literals,
   `current = <recompute>`, and a loop that prints each delta. Values are `None`, `bool`, `int`,
@@ -195,7 +199,7 @@ that moves the pin.
 
 ## Development
 
-See [CLAUDE.md](CLAUDE.md) for the development loop and the checks CI runs.
+See [CLAUDE.md](https://github.com/npstorey/typedstandards-python/blob/main/CLAUDE.md) for the development loop and the checks CI runs.
 
 ## License
 

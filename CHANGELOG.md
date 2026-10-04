@@ -21,3 +21,8 @@
   `trustRegistry`.
 - `show`: HTML for Jupyter (`_repr_html_`) or Marimo (`mo.Html`) from a record and its
   `verify --json` result.
+- `badge_cell` no longer reads a URL's host and port as a time: `https://192.168.1.10:8080/…` is
+  accepted. A date or time in the URL's path, query or fragment (as written or percent-encoded) or
+  in a fact is refused.
+- README: only the calls that run the CLI need Node (the five commands, `cli_version()`, and
+  `show` without a result); its links are absolute, so they resolve on the PyPI page.
