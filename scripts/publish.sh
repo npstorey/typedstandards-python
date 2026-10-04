@@ -12,8 +12,10 @@
 #       Uploads exactly the files the dry run built and checked: dist/ must match dist/SHA256SUMS
 #       and the commit the dry run recorded. Then reads the release back from PyPI for about five
 #       minutes, and installs it into a fresh environment, which must print CLI_VERSION.
-#       pypi.env holds a 1Password reference, never a value:
+#       pypi.env holds a 1Password reference, never a value, on one unquoted line:
 #           UV_PUBLISH_TOKEN=op://<vault>/<item>/<field>
+#       The live run refuses a token that does not start with "pypi-", which is what an unresolved
+#       or quoted reference looks like.
 #
 #   READ_BACK=1 scripts/publish.sh
 #       Only the read-back and the fresh-environment check, for a run that stopped after uploading.
@@ -176,6 +178,12 @@ fi
 
 # --- the live run ---------------------------------------------------------------------------
 [ -n "${UV_PUBLISH_TOKEN:-}" ] || die "UV_PUBLISH_TOKEN is not set: run through op run --env-file=pypi.env"
+# A PyPI API token starts with "pypi-". An op:// reference that op run did not resolve, or a value
+# kept with its quotes, would otherwise go to PyPI as the token. The value is never printed.
+case "$UV_PUBLISH_TOKEN" in
+  pypi-*) ;;
+  *) die "UV_PUBLISH_TOKEN does not start with \"pypi-\", so it is not a PyPI API token: an op:// reference op run did not resolve, or a quoted value, reads this way. pypi.env holds one unquoted line, UV_PUBLISH_TOKEN=op://<vault>/<item>/<field>; run: op run --env-file=<path to pypi.env> -- scripts/publish.sh" ;;
+esac
 [ "$dated" = "$(date +%F)" ] || die "CHANGELOG.md dates $VERSION $dated, and today is $(date +%F): the heading names the publish day"
 [ -f "$DIST/SHA256SUMS" ] && [ -f "$DIST/COMMIT" ] || die "run DRY_RUN=1 scripts/publish.sh first: the live run uploads what it built"
 [ "$(cat "$DIST/COMMIT")" = "$(git rev-parse HEAD)" ] || die "$DIST was built at $(cat "$DIST/COMMIT"), not HEAD; run the dry run again"
