@@ -1,13 +1,42 @@
-"""Fixtures: a test seed in the environment, and a recorder of the wrapper's child processes."""
+"""Fixtures: no network for any test, a test seed in the environment, and a recorder of the
+wrapper's child processes."""
 
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 from typing import Any
 
 import pytest
-from support import SEED_VARIABLE, fresh_seed_b64
+from support import SEED_VARIABLE, NetworkBlocked, fresh_seed_b64
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test runs offline: opening a connection or binding a port raises NetworkBlocked.
+
+    The CLI makes no network request and the helpers' HTTP goes through an injected
+    ``httpx.MockTransport``, so nothing a test does should reach a socket. Child processes (the
+    CLI under Node) are outside this guard; the CLI's own contract is that it opens none.
+    """
+
+    def connect(self: socket.socket, address: Any) -> None:
+        raise NetworkBlocked(f"a test opened a network connection to {address!r}")
+
+    def connect_ex(self: socket.socket, address: Any) -> int:
+        raise NetworkBlocked(f"a test opened a network connection to {address!r}")
+
+    def bind(self: socket.socket, address: Any) -> None:
+        raise NetworkBlocked(f"a test bound a port at {address!r}")
+
+    def create_connection(address: Any, *args: Any, **kwargs: Any) -> socket.socket:
+        raise NetworkBlocked(f"a test opened a network connection to {address!r}")
+
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    monkeypatch.setattr(socket.socket, "bind", bind)
+    monkeypatch.setattr(socket, "create_connection", create_connection)
 
 
 @pytest.fixture

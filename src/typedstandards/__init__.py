@@ -7,10 +7,14 @@ from the environment it inherits, and does all of the format's work.
 
 from __future__ import annotations
 
+from ._badge import badge_cell
 from ._cli import cli_entry
 from ._cli import run as _run
 from ._commands import attest, sign, verify, view, withdraw
+from ._comparison import comparison_cell
 from ._node import NODE_FLOOR, NODE_OVERRIDE, locate_node
+from ._show import Shown, show
+from ._sidecar import sidecar
 from .errors import (
     CliError,
     CliNotVendoredError,
@@ -20,6 +24,7 @@ from .errors import (
     UsageError,
     VerificationError,
 )
+from .pin import Pinned, pin
 
 __version__ = "0.1.0.dev0"
 
@@ -40,14 +45,21 @@ __all__ = [
     "CliNotVendoredError",
     "InternalError",
     "NodeLocatorError",
+    "Pinned",
     "SeedError",
+    "Shown",
     "UsageError",
     "VerificationError",
     "__version__",
     "attest",
+    "badge_cell",
     "cli_entry",
     "cli_version",
+    "comparison_cell",
     "locate_node",
+    "pin",
+    "show",
+    "sidecar",
     "sign",
     "verify",
     "view",

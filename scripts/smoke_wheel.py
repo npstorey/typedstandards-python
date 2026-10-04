@@ -5,8 +5,10 @@ the environment, as CI's wheel job does:
 
     TYPEDSTANDARDS_SIGNING_SEED_B64="$(openssl rand -base64 32)" <venv>/bin/python scripts/smoke_wheel.py
 
-It checks the import, CLI_VERSION, the vendored CLI's --version, the vendored tree's licences, and
-one sign-then-verify round trip (sign, view, verify) through the vendored CLI. It reads no seed.
+It checks the import, CLI_VERSION, the vendored CLI's --version, the vendored tree's licences,
+one sign-then-verify round trip (sign, view, verify) through the vendored CLI, and the five
+helpers with the runtime dependencies the wheel declares (httpx for pin, PyYAML for sidecar),
+offline: pin over httpx.MockTransport. It reads no seed.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from __future__ import annotations
 import json
 import sys
 import sysconfig
+import tempfile
 from pathlib import Path
 
 import typedstandards
@@ -61,8 +64,45 @@ def main() -> int:
     print(f"signed {signed['envelopeHash']}; verify ok={result['ok']} status={result['lifecycle']['status']}")
     assert result["ok"] is True
     assert result["nodeId"] == signed["envelopeHash"]
+    helpers(record)
     print("smoke check passed")
     return 0
+
+
+def helpers(record: dict) -> None:
+    import httpx
+
+    def portal(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/views/abcd-1234":
+            return httpx.Response(200, json={"rowsUpdatedAt": 1790991539})
+        return httpx.Response(200, content=b"a,b\n1,2\n")
+
+    content, entry = typedstandards.pin(
+        "https://data.example.org/resource/abcd-1234.csv", transport=httpx.MockTransport(portal)
+    )
+    assert content == b"a,b\n1,2\n" and entry["arguments"]["rowsUpdatedAt"] == 1790991539, entry
+
+    with tempfile.TemporaryDirectory() as tmp:
+        notebook = Path(tmp) / "analysis.ipynb"
+        cells = [{"cell_type": "code", "execution_count": None, "id": "a", "metadata": {}, "outputs": [], "source": []}]
+        document = {"cells": cells, "metadata": {}, "nbformat": 4, "nbformat_minor": 5}
+        notebook.write_text(json.dumps(document, indent=1) + "\n", encoding="utf-8")
+        typedstandards.badge_cell(
+            "https://records.example.org/bundles/analysis.bundle.json", capture_method="script-run", notebook=notebook
+        )
+        typedstandards.comparison_cell(
+            notebook, {"rows": 2}, recompute="recompute()", captured_at="2026-10-03T00:00:00Z"
+        )
+        inline = {k: v for k, v in record.items() if k != "output"}
+        signed = typedstandards.sign({**inline, "queries": [entry]}, output_file=notebook)
+        bundle = typedstandards.view(signed, visibility="public")
+        result = typedstandards.verify(bundle)
+        assert result["ok"] is True
+        yaml_path = typedstandards.sidecar(bundle, notebook)
+        assert yaml_path.name == "analysis.ipynb.record.yaml", yaml_path
+        html = typedstandards.show(bundle, result)._repr_html_()
+        assert "Signed with a self-certifying key" in html
+    print("helpers: pin, badge_cell, comparison_cell, sidecar and show ran from the installed wheel")
 
 
 if __name__ == "__main__":

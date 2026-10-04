@@ -113,6 +113,81 @@ pins a CLI that accepts it, `verify` drops a bundle's top-level `trustRegistry` 
 sees the bundle, and changes nothing else. A test pins that the CLI receives the same document
 minus that one key.
 
+## Notebook helpers
+
+Five helpers arrange and render around the CLI. None of them computes one of the format's hashes,
+reads the seed, or verifies anything itself.
+
+```python
+import io
+import pandas as pd
+import typedstandards as ts
+
+# Before signing: pin each input, and add the reader's badge and the comparison cell.
+content, entry = ts.pin("https://data.example.org/resource/abcd-1234.csv", licence="CC-BY-4.0")
+frame = pd.read_csv(io.BytesIO(content))
+
+ts.badge_cell(
+    "https://records.example.org/bundles/analysis.bundle.json",
+    capture_method="script-run",
+    notebook="analysis.ipynb",
+)
+ts.comparison_cell(
+    "analysis.ipynb",
+    {"rows": 1204, "mean_fare": 13.75},
+    recompute="recompute_key_metrics()",
+    captured_at="2026-10-03T12:00:00Z",
+)
+
+# Sign (record is an envelope input like the one under Use), then serve and show.
+signed = ts.sign({**record, "queries": [entry]}, output_file="analysis.ipynb")
+bundle = ts.view(signed, visibility="public", title="Example analysis")
+ts.sidecar(bundle, "analysis.ipynb")  # writes analysis.ipynb.record.yaml
+ts.show(bundle)  # in Jupyter; ts.show(bundle, marimo=True) in Marimo
+```
+
+- **`pin(url, *, licence=None, dataset_id=None, portal_metadata=None, save=None, ...)`** fetches
+  `url` once and returns `Pinned(content, entry)`: the response body, and a retrieval entry for
+  the record's `queries[]` with `url`, `sha256` (of the body), `bytes`, `httpStatus` and
+  `fetchedAt` (ISO 8601 UTC) under `arguments`. A URL shaped like an open-data portal resource
+  (`…/resource/<id>[.ext]` or `…/api/views/<id>/rows.<ext>`, `<id>` being `xxxx-xxxx`) gets a
+  second request to `<origin>/api/views/<id>`, and the entry gains the portal's `rowsUpdatedAt`
+  (epoch seconds) and `datasetId`. A response that is not 2xx raises. `save=` writes the bytes
+  to that path and the entry to `<path>.pin.json`. The SHA-256 is the one digest the package
+  computes: a signed assertion in `queries[]` that no check recomputes.
+- **`badge_cell(bundle_url, *, capture_method, notebook=None, host=None, marimo=False)`** writes
+  the verifier badge, linked to `https://typedstandards.org/verify?url=<the bundle URL,
+  percent-encoded>` as `@typedstandards/host-core` writes it, above a two-row table (the host and
+  the capture method). With `notebook`, it is inserted as the notebook's first cell (id
+  `typedstandards-badge` on nbformat 4.5). With `marimo=True`, it returns the source of a
+  `mo.md(...)` cell to paste into the app. The cell is written before signing and is part of the
+  signed bytes, so it names no hash and no time; a URL or value holding a 64-hex string, a date or
+  a time is refused.
+- **`comparison_cell(notebook, values, *, recompute, captured_at)`** appends the comparison cell
+  of spec §8.7.4 as the last cell (id `typedstandards-comparison`): the values as Python literals,
+  `current = <recompute>`, and a loop that prints each delta. Values are `None`, `bool`, `int`,
+  finite `float`, `str`, and lists and str-keyed dicts of those; anything else is refused.
+- **`sidecar(view, artifact, *, directory=None)`** writes the commitment view as YAML (spec
+  §8.8.3) beside the artifact: every field `view` printed except the inline `package` and a
+  served bundle's `trustRegistry`, which are not §8.8.1 fields. The file is named
+  `<artifact's file name>.record.yaml`, extension kept (`analysis.ipynb.record.yaml`): the spec's
+  `<artifact-basename>` does not say whether the extension stays, and keeping it is the POSIX
+  basename and cannot collide when two artifacts share a stem (`analysis.ipynb` beside
+  `analysis.py`).
+- **`show(record, result=None, *, role_path=("role",), marimo=False)`** renders a record (what
+  `view` or `sign` printed) with its `verify --json` result: the type, the role, the signer,
+  the hash, `createdAt`, the `vcsRef` (marked as asserted and not fetched), the status with its
+  reason or successor, one line per check, and a sentence saying that verification does not say
+  the analysis is correct. Without `result` it runs `verify`. In Jupyter it returns an object
+  with `_repr_html_`; with `marimo=True`, `mo.Html`. The role is a signed assertion the signer
+  made, read from the package's `extensions` at `role_path` (by default `extensions["role"]`, a
+  string or a list of strings); `show` labels it as the signer's and checks nothing about it.
+
+The notebook helpers edit the notebook as JSON, splicing the new cell into `cells` so every
+other byte of the file stays as written. `httpx` is imported only inside `pin`, PyYAML only
+inside `sidecar`, and `marimo` only inside a Marimo call; `IPython`, `marimo` and `nbformat`
+are not dependencies.
+
 ## Versions
 
 Each wrapper release pins one CLI version exactly. A CLI upgrade reaches users as a wrapper release

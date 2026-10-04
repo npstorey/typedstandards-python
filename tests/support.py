@@ -66,3 +66,82 @@ def write_stub(directory: Path, name: str, version: str, exit_code: int = 4, std
     )
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return path
+
+
+class NetworkBlocked(RuntimeError):
+    """Raised by conftest.py's autouse guard when a test opens a connection or binds a port."""
+
+
+def synthetic_notebook(
+    *,
+    minor: int = 5,
+    indent: int | None = 1,
+    ensure_ascii: bool = False,
+    newline: str = "\n",
+    cells: list[dict[str, Any]] | None = None,
+) -> str:
+    """A small notebook's text, written as nbformat writes it by default (sorted keys, indent 1,
+    a trailing newline, raw UTF-8), or in another style for the splice tests."""
+    if cells is None:
+        cells = [
+            {
+                "cell_type": "markdown",
+                "id": "intro",
+                "metadata": {},
+                "source": ["# Example analysis\n", "\n", "Résumé of the method — café 実験.\n"],
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 1,
+                "id": "load",
+                "metadata": {"tags": ["parameters"]},
+                "outputs": [{"name": "stdout", "output_type": "stream", "text": ["1.50\n"]}],
+                "source": ["total = 1.50\n", "print(f'{total:.2f}')"],
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "id": "plot",
+                "metadata": {},
+                "outputs": [],
+                "source": ["values = [1e-3, 2.0, -0.0]"],
+            },
+        ]
+        if minor < 5:
+            for cell in cells:
+                del cell["id"]
+    notebook = {
+        "cells": cells,
+        "metadata": {
+            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+            "language_info": {"name": "python", "version": "3.12.0"},
+        },
+        "nbformat": 4,
+        "nbformat_minor": minor,
+    }
+    if indent is None:
+        return json.dumps(notebook, sort_keys=True, ensure_ascii=ensure_ascii)
+    text = json.dumps(notebook, sort_keys=True, indent=indent, ensure_ascii=ensure_ascii, separators=(",", ": "))
+    return (text + "\n").replace("\n", newline)
+
+
+def analysis_input(**extra: Any) -> dict[str, Any]:
+    """A scripted-recomputation envelope input for a file signed inline (``output_file``), with a
+    self-certifying signer whose identifier the CLI fills with the seed's did:key."""
+    value: dict[str, Any] = {
+        "type": "content/analysis/v1",
+        "producerProfile": "scripted-recomputation/example",
+        "captureMethod": "script-run",
+        "prompt": "Run the example notebook end to end and record its output.",
+        "promptVisibility": "full_text",
+        "queries": [
+            {"tool": "jupyter nbconvert --execute", "operationType": "script-run", "arguments": {"notebook": "x"}}
+        ],
+        "dataSources": [],
+        "cost": {"model": "none"},
+        "skillMetadata": {},
+        "trace": {"resourceSpans": []},
+        "signer": {"bindingTier": "pseudonymous", "displayName": "Example analyst"},
+    }
+    value.update(extra)
+    return value

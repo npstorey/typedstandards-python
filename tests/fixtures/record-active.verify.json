@@ -1,0 +1,74 @@
+{
+ "ok": true,
+ "nodeId": "a171d1ab156d578ecabae1722f5602f0fde77757e22aae07cfa67cbdf77fd963",
+ "failures": [],
+ "checks": {
+  "hashMatch": true,
+  "envelopeIntegrity": {
+   "status": "verified"
+  },
+  "recomputedHash": "a171d1ab156d578ecabae1722f5602f0fde77757e22aae07cfa67cbdf77fd963",
+  "nodeId": "a171d1ab156d578ecabae1722f5602f0fde77757e22aae07cfa67cbdf77fd963",
+  "signatureValid": true,
+  "kid": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn",
+  "hasSigning": true,
+  "rekorVerified": null,
+  "rekorDetails": null,
+  "rekorInclusion": null,
+  "hasRekor": false,
+  "hasTimestamp": false,
+  "rfc3161": null,
+  "keyTrust": {
+   "status": "self_certified",
+   "verified": false,
+   "kid": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+  },
+  "blobRefsVerified": null,
+  "blobRefs": [],
+  "contentCanonicalization": {
+   "status": "ok",
+   "rule": "https://typedstandards.org/canonicalization/raw-bytes/v1"
+  },
+  "contentHash": {
+   "status": "ok",
+   "algorithms": [
+    "sha256"
+   ],
+   "matched": "sha256",
+   "contentHash": {
+    "sha256": "fa89d5ea2a270f75af92cc095c41c107bee2a2fbc8cb887b52bcc7e6e6a22645"
+   }
+  },
+  "typeResolution": {
+   "status": "ok",
+   "type": "content/analysis/v1"
+  },
+  "signerIdentity": {
+   "status": "key_derived_match",
+   "claimed": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn",
+   "derived": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+  },
+  "signingKeyIdConsistency": {
+   "status": "ok"
+  },
+  "captureMethodVocab": {
+   "status": "ok",
+   "captureMethod": "script-run",
+   "profileType": "scripted-recomputation"
+  },
+  "contentProfile": {
+   "status": "contentProfile_absent",
+   "producerProfile": "scripted-recomputation/example"
+  },
+  "lifecycle": {
+   "status": "active",
+   "source": "none",
+   "chain": []
+  }
+ },
+ "lifecycle": {
+  "status": "active",
+  "source": "none",
+  "chain": []
+ }
+}

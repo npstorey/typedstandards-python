@@ -38,6 +38,11 @@ def test_package_imports_no_digest_module() -> None:
     assert hash_imports(PACKAGE) == []
 
 
+def test_only_pin_imports_a_digest_module() -> None:
+    """pin.py is allowlisted for its one digest, a signed assertion; no other module joins it."""
+    assert {line.split(":", 1)[0] for line in hash_imports(PACKAGE, allow=frozenset())} == {"pin.py"}
+
+
 def test_package_runs_no_global_cli() -> None:
     """The wrapper runs the vendored entry file, never npx or a typedstandards on PATH."""
     for path in PACKAGE.rglob("*.py"):

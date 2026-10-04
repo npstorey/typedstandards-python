@@ -1,0 +1,116 @@
+{
+ "protocolVersion": "0.1.0",
+ "packageHash": "cba7829c5b6374f760b9558227e2a9faccfdb457d104016d95a5acc4923423ab",
+ "visibility": "public",
+ "captureMethod": "script-run",
+ "contentProfile": "default",
+ "producerProfile": "scripted-recomputation/example",
+ "type": "content/analysis/v1",
+ "signer": {
+  "bindingTier": "pseudonymous",
+  "displayName": "Example analyst",
+  "identifier": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+ },
+ "contentHash": {
+  "sha256": "5e1d84bd5e11836479fc3749bd8e167310e1199dbd65bf64b5e6223b1dbc8522"
+ },
+ "contentCanonicalization": "https://typedstandards.org/canonicalization/raw-bytes/v1",
+ "signature": {
+  "signature": "xXfyPAhztpEcaRf8Hs6WZZI1yqsdCrRkGagWw1FO6ZHk2FG7tL5RPttaCjQhWGofAZYdvho6C7r+aYRACH5FBg==",
+  "publicKey": "MCowBQYDK2VwAyEA3qfVxXXRaXMS9un5GWm9HIHD8vKfhf3IV6GENrN/eKM=",
+  "algorithm": "Ed25519ph",
+  "kid": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+ },
+ "lifecycle": {
+  "status": "withdrawn",
+  "withdrawnAt": "2026-10-03T12:30:00.000Z",
+  "withdrawnReason": "The claim compared periods of different lengths; a restatement replaces it."
+ },
+ "lifecycleAttestations": [
+  {
+   "node": {
+    "metadata": {
+     "schemaVersion": "0.1.0",
+     "packageId": "5a1d9c3e-7b20-4e8f-a6d4-2c9b0e1f3a57",
+     "createdAt": "2026-10-03T12:30:00.000Z",
+     "signingKeyId": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+    },
+    "type": "attestation/withdraws/v1",
+    "signer": {
+     "bindingTier": "pseudonymous",
+     "displayName": "Example analyst",
+     "identifier": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+    },
+    "targetNodeId": "cba7829c5b6374f760b9558227e2a9faccfdb457d104016d95a5acc4923423ab",
+    "contentCanonicalization": "https://typedstandards.org/canonicalization/legacy-json/v1",
+    "reason": "The claim compared periods of different lengths; a restatement replaces it.",
+    "effectiveAt": "2026-10-03T12:30:00.000Z",
+    "contentHash": {
+     "sha256": "412e4124e1a61a2e259c5350a8efecd0b9b851a8eaa0925654884ef75cf66174"
+    }
+   },
+   "nodeId": "f9c3bcea58a9407f453a5b102283f8eb79bb643bbbdb731648c7a2d7cec60044",
+   "signature": {
+    "signature": "cGDO7H8AiyvdudFeiBTj4EsMKOQshCK9tRnhvORFKr1HBoIcyqN8cTQfHQ27+iSga/tTv3uvO2ombi0xBKXLAw==",
+    "publicKey": "MCowBQYDK2VwAyEA3qfVxXXRaXMS9un5GWm9HIHD8vKfhf3IV6GENrN/eKM=",
+    "algorithm": "Ed25519ph",
+    "kid": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+   }
+  }
+ ],
+ "subjectTitle": "Example claim",
+ "subjectSummary": "An example claim drawn from the analysis notebook.",
+ "package": {
+  "metadata": {
+   "schemaVersion": "0.1.0",
+   "packageId": "0b3c8d7e-2f41-4a9b-8c65-91d2e4f7a3b0",
+   "createdAt": "2026-10-03T12:06:00.000Z",
+   "signingKeyId": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn",
+   "captureMethod": "script-run"
+  },
+  "producerProfile": "scripted-recomputation/example",
+  "type": "content/analysis/v1",
+  "signer": {
+   "bindingTier": "pseudonymous",
+   "displayName": "Example analyst",
+   "identifier": "did:key:z6MkuSQzHivrroMKjau3BrVNaK3cGQq9RdUiXuMH7YAwYNzn"
+  },
+  "vcsRef": {
+   "repoUrl": "https://git.example.com/example/analysis",
+   "commitSha": "0123456789abcdef0123456789abcdef01234567",
+   "ref": "refs/heads/main",
+   "path": "claims/median-fare.md"
+  },
+  "contentCanonicalization": "https://typedstandards.org/canonicalization/raw-bytes/v1",
+  "prompt": {
+   "hash": "46da256c80af2a74594076f33694665b508d5c485abbfcc3f55030f247613226",
+   "visibility": "full_text",
+   "text": "Run the example notebook end to end and record its output."
+  },
+  "queries": [
+   {
+    "tool": "jupyter nbconvert --execute",
+    "operationType": "script-run",
+    "arguments": {
+     "notebook": "x"
+    }
+   }
+  ],
+  "dataSources": [],
+  "cost": {
+   "model": "none"
+  },
+  "skillMetadata": {},
+  "output": "The median fare rose by 4 percent between the two periods.\n",
+  "trace": {
+   "resourceSpans": []
+  },
+  "summary": "An example claim drawn from the analysis notebook.",
+  "extensions": {
+   "role": "claim"
+  },
+  "contentHash": {
+   "sha256": "5e1d84bd5e11836479fc3749bd8e167310e1199dbd65bf64b5e6223b1dbc8522"
+  }
+ }
+}

@@ -1,0 +1,34 @@
+{
+ "cases": [
+  {
+   "url": "https://host-template.typedstandards.org/bundles/first-note.bundle.json",
+   "verify": "https://typedstandards.org/verify?url=https%3A%2F%2Fhost-template.typedstandards.org%2Fbundles%2Ffirst-note.bundle.json",
+   "markdown": "[![Verify this record with Typed Standards](https://typedstandards.org/badge/typed-standards-verify.svg)](<https://typedstandards.org/verify?url=https%3A%2F%2Fhost-template.typedstandards.org%2Fbundles%2Ffirst-note.bundle.json>)"
+  },
+  {
+   "url": "https://records.example.org/bundles/analysis.bundle.json",
+   "verify": "https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2Fbundles%2Fanalysis.bundle.json",
+   "markdown": "[![Verify this record with Typed Standards](https://typedstandards.org/badge/typed-standards-verify.svg)](<https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2Fbundles%2Fanalysis.bundle.json>)"
+  },
+  {
+   "url": "https://records.example.org/a-b_c.d!e~f*g'h(i)j/k.bundle.json",
+   "verify": "https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2Fa-b_c.d!e~f*g'h(i)j%2Fk.bundle.json",
+   "markdown": "[![Verify this record with Typed Standards](https://typedstandards.org/badge/typed-standards-verify.svg)](<https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2Fa-b_c.d!e~f*g'h(i)j%2Fk.bundle.json>)"
+  },
+  {
+   "url": "https://records.example.org/path with space/x.bundle.json?q=1&r=a+b#frag",
+   "verify": "https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2Fpath%20with%20space%2Fx.bundle.json%3Fq%3D1%26r%3Da%2Bb%23frag",
+   "markdown": "[![Verify this record with Typed Standards](https://typedstandards.org/badge/typed-standards-verify.svg)](<https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2Fpath%20with%20space%2Fx.bundle.json%3Fq%3D1%26r%3Da%2Bb%23frag>)"
+  },
+  {
+   "url": "https://records.example.org/café/実験/%41.bundle.json",
+   "verify": "https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2Fcaf%C3%A9%2F%E5%AE%9F%E9%A8%93%2F%2541.bundle.json",
+   "markdown": "[![Verify this record with Typed Standards](https://typedstandards.org/badge/typed-standards-verify.svg)](<https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2Fcaf%C3%A9%2F%E5%AE%9F%E9%A8%93%2F%2541.bundle.json>)"
+  },
+  {
+   "url": "https://records.example.org/<tag>/\"quoted\"/[x]{y}|z^`\\.bundle.json",
+   "verify": "https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2F%3Ctag%3E%2F%22quoted%22%2F%5Bx%5D%7By%7D%7Cz%5E%60%5C.bundle.json",
+   "markdown": "[![Verify this record with Typed Standards](https://typedstandards.org/badge/typed-standards-verify.svg)](<https://typedstandards.org/verify?url=https%3A%2F%2Frecords.example.org%2F%3Ctag%3E%2F%22quoted%22%2F%5Bx%5D%7By%7D%7Cz%5E%60%5C.bundle.json>)"
+  }
+ ]
+}
