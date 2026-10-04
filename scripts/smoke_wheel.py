@@ -33,7 +33,7 @@ def main() -> int:
     print(f"CLI_VERSION {typedstandards.CLI_VERSION}; the vendored CLI's --version prints {printed}")
     assert printed == typedstandards.CLI_VERSION
 
-    entry = typedstandards.cli_entry()
+    entry = typedstandards.cli_entry().resolve()
     assert entry.is_relative_to(package / "_vendor"), entry
     vendor = package / "_vendor"
     lock = json.loads((vendor / "package-lock.json").read_text(encoding="utf-8"))
