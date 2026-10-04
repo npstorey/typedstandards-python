@@ -46,7 +46,8 @@ sha256_of() { shasum -a 256 "$1" | cut -d' ' -f1; }
 # The JSON PyPI serves for this version, or nothing when it does not have it (yet).
 pypi_release_json() { curl -sf --max-time 30 "$PYPI/pypi/$PACKAGE/$VERSION/json" || true; }
 
-# Exit 0 when PyPI lists every file in $DIST/SHA256SUMS with the same SHA-256; print what it lists.
+# Print what PyPI lists for each file in $DIST/SHA256SUMS. Exit 0 when every file is listed with the
+# same SHA-256, 2 when any is listed with a different one, 1 when any is not listed yet.
 pypi_matches_sums() {
   local json
   json="$(pypi_release_json)"
@@ -54,15 +55,16 @@ pypi_matches_sums() {
   JSON="$json" uv run --no-project --quiet python - "$DIST/SHA256SUMS" <<'PY'
 import json, os, sys
 listed = {f["filename"]: f["digests"]["sha256"] for f in json.loads(os.environ["JSON"])["urls"]}
-ok = True
+missing = different = False
 for line in open(sys.argv[1], encoding="utf-8"):
     digest, name = line.split()
     name = name.lstrip("*")
     seen = listed.get(name)
     state = "same SHA-256" if seen == digest else ("not listed yet" if seen is None else f"DIFFERENT SHA-256 {seen}")
     print(f"publish:   {name}  {digest}  PyPI: {state}")
-    ok = ok and seen == digest
-sys.exit(0 if ok else 1)
+    missing = missing or seen is None
+    different = different or (seen is not None and seen != digest)
+sys.exit(2 if different else 1 if missing else 0)
 PY
 }
 
@@ -70,7 +72,16 @@ read_back() {
   [ -f "$DIST/SHA256SUMS" ] || die "$DIST/SHA256SUMS is missing: it is written by the dry run"
   say "reading $PACKAGE $VERSION back from $PYPI, for up to $READ_BACK_SECONDS seconds"
   local deadline=$((SECONDS + READ_BACK_SECONDS))
-  until pypi_matches_sums; do
+  while :; do
+    local rc=0
+    pypi_matches_sums || rc=$?
+    [ "$rc" -eq 0 ] && break
+    if [ "$rc" -eq 2 ]; then
+      say "PyPI lists a file of $PACKAGE $VERSION with a different SHA-256 from the file built here,"
+      say "so what PyPI serves is not this build. A version cannot be uploaded twice: do not retry."
+      say "Compare $DIST/SHA256SUMS with $PYPI/project/$PACKAGE/$VERSION/#files"
+      exit 2
+    fi
     if [ "$SECONDS" -ge "$deadline" ]; then
       say "PyPI has not listed every file with these hashes within $READ_BACK_SECONDS seconds."
       say "An upload can take longer to appear; this alone does not mean it failed."
