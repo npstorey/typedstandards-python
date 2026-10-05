@@ -47,17 +47,39 @@ def seed(monkeypatch: pytest.MonkeyPatch) -> str:
     return value
 
 
+#: The CLI flags whose value is an input document's path (or ``-`` for standard input).
+INPUT_FLAGS = frozenset({"--input", "--signed", "--attestation"})
+
+
+def _input_files(args: list[str]) -> dict[str, bytes]:
+    """The bytes of every input file the argv names, read as the child starts: the wrapper
+    removes its temporary files before it returns."""
+    files = {}
+    for flag, value in zip(args, args[1:], strict=False):
+        if flag in INPUT_FLAGS and value != "-" and os.path.isfile(value):
+            with open(value, "rb") as handle:
+                files[value] = handle.read()
+    return files
+
+
 @pytest.fixture
 def spawned(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     """Record every child process the wrapper starts: its argv, its keyword arguments, the
-    stdin bytes it was given, and os.environ at that moment. The call still runs."""
+    stdin bytes it was given, the bytes of each input file its argv names (``files``, read at
+    spawn), and os.environ at that moment. The call still runs."""
     calls: list[dict[str, Any]] = []
     real_popen = subprocess.Popen
     real_communicate = subprocess.Popen.communicate
 
     class RecordingPopen(real_popen):  # type: ignore[misc, valid-type]
         def __init__(self, args: Any, *rest: Any, **kwargs: Any) -> None:
-            self._record = {"args": list(args), "kwargs": dict(kwargs), "environ": dict(os.environ), "stdin": None}
+            self._record = {
+                "args": list(args),
+                "kwargs": dict(kwargs),
+                "environ": dict(os.environ),
+                "stdin": None,
+                "files": _input_files([str(a) for a in args]),
+            }
             calls.append(self._record)
             super().__init__(args, *rest, **kwargs)
 

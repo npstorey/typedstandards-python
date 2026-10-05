@@ -121,12 +121,15 @@ def test_sign_an_output_file_inline(seed: str, tmp_path: Path) -> None:
     assert signed["package"]["contentHash"]["sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
 
 
-def test_mapping_input_goes_on_stdin(seed: str, spawned: list[dict[str, Any]]) -> None:
+def test_mapping_input_goes_in_a_temporary_file(seed: str, spawned: list[dict[str, Any]]) -> None:
     value = self_certifying_input()
     typedstandards.sign(value)
     (call,) = cli_calls(spawned, "sign")
-    assert call["args"][3:] == ["--input", "-"]
-    assert json.loads(call["stdin"].decode("utf-8")) == value
+    (path,) = flag_values(call["args"], "--input")
+    assert call["args"][3:] == ["--input", path]
+    assert call["stdin"] is None
+    assert json.loads(call["files"][path].decode("utf-8")) == value
+    assert not Path(path).exists()
 
 
 def test_success_diagnostics_are_logged(seed: str, caplog: pytest.LogCaptureFixture) -> None:

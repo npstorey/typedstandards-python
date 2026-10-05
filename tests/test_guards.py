@@ -210,6 +210,8 @@ def test_every_child_inherits_the_environment(seed: str, spawned: list[dict[str,
             pytest.fail("the seed reached an argument")
         if call["stdin"] is not None and seed.encode() in call["stdin"]:
             pytest.fail("the seed reached stdin")
+        if any(seed.encode() in content for content in call["files"].values()):
+            pytest.fail(f"the seed reached an input file of {call['args'][2:3]}")
     if dict(os.environ) != before:
         pytest.fail(f"the environment changed: {_changed_keys(before, dict(os.environ))}")
 
