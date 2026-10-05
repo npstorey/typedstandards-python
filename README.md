@@ -76,8 +76,8 @@ bundle = ts.view(signed, visibility="public", title="Example analysis")
 result = ts.verify(bundle)  # {ok, nodeId, failures, checks, lifecycle}
 ```
 
-Each function returns the CLI's stdout parsed as JSON. An input may be a mapping (sent to the CLI
-as JSON on standard input) or the path of a JSON file.
+Each function returns the CLI's stdout parsed as JSON. An input may be a mapping (written as JSON
+to a temporary file the CLI reads) or the path of a JSON file.
 
 | Function | CLI command | Returns |
 |---|---|---|
@@ -87,7 +87,9 @@ as JSON on standard input) or the path of a JSON file.
 | `view(signed, *, visibility, attestations=(), trust_registry_url=None, package_url=None, title=None)` | `view` | the commitment view, package inline |
 | `verify(input, *, blobs=(), full=True)` | `verify` (`--json` when `full`) | `{ok, nodeId, failures, checks, lifecycle}` |
 
-`view` writes the mappings it is given to temporary files, removed before it returns. The CLI's
+The temporary files are removed before the function returns, whether the CLI succeeded or not. No
+input reaches the CLI through a pipe, where CLI 0.2.0 fails on a document larger than a pipe buffer
+holds. The CLI's
 [README](https://github.com/npstorey/typedstandards/tree/main/packages/cli#readme) describes each
 command's inputs. What the CLI prints on stderr when it succeeds (attention readings, such as an
 offline `registry_unavailable`) is logged at INFO on the `typedstandards` logger.

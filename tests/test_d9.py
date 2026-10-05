@@ -33,6 +33,16 @@ def cli_calls(spawned: list[dict[str, Any]], command: str) -> list[dict[str, Any
     return [c for c in spawned if len(c["args"]) > 2 and c["args"][1] == entry and c["args"][2] == command]
 
 
+def received_input(call: dict[str, Any]) -> bytes:
+    """The document the CLI read: the file its ``--input`` named, as it was when the child started
+    (the wrapper sends a mapping as a temporary file, never on a pipe; typedstandards-python#6)."""
+    (path,) = [call["args"][i + 1] for i, a in enumerate(call["args"]) if a == "--input"]
+    assert path != "-", "the document reached the CLI on standard input"
+    assert call["stdin"] is None
+    assert not Path(path).exists(), "the temporary file was left behind"
+    return call["files"][path]
+
+
 def test_fixture_is_the_pinned_copy() -> None:
     assert hashlib.sha256(BUNDLE_PATH.read_bytes()).hexdigest() == BUNDLE_SHA256
     assert "trustRegistry" in bundle()
@@ -54,7 +64,7 @@ def test_verify_drops_only_trust_registry(spawned: list[dict[str, Any]]) -> None
     assert result["nodeId"] == original["packageHash"]
     assert given == original, "the caller's bundle was changed"
     (call,) = cli_calls(spawned, "verify")
-    received = json.loads(call["stdin"].decode("utf-8"))
+    received = json.loads(received_input(call))
     expected = {k: v for k, v in original.items() if k != "trustRegistry"}
     assert received == expected
     assert list(received) == list(expected), "key order changed"
@@ -64,7 +74,7 @@ def test_verify_drops_it_from_a_path_too(spawned: list[dict[str, Any]]) -> None:
     result = typedstandards.verify(BUNDLE_PATH)
     assert result["ok"] is True
     (call,) = cli_calls(spawned, "verify")
-    received = json.loads(call["stdin"].decode("utf-8"))
+    received = json.loads(received_input(call))
     assert received == {k: v for k, v in bundle().items() if k != "trustRegistry"}
 
 

@@ -75,8 +75,8 @@ gate on their own.
 ## Rollback tags
 
 Bracket every phase merge: `rollback/pre-produce-py-p<n>` at the pre-merge anchor and
-`rollback/produce-py-p<n>-merged` at the merge commit. The orchestrator pushes them, not
-implementation sessions.
+`rollback/produce-py-p<n>-merged` at the merge commit. The orchestrator pushes them, or hands them
+to the owner as part of the merge script; implementation sessions never do.
 
 ## Push guard
 
@@ -85,6 +85,9 @@ commit, so a fix on top does not clear an earlier commit: the flagged bytes must
 pushed history. Pushes go to the owner as one command, after `gitleaks git --log-opts="main..HEAD"`
 over the outgoing range is clean. Never bypass the guard and never tune its patterns on your own
 initiative. `.gitleaks.toml` allows only Ed25519 `did:key` identifiers, which are public keys.
+gitleaks reads `.gitleaks.toml` from the directory it runs in, so a branch that adds or changes
+that file is pushed from its own worktree (`git -C .worktrees/<phase> push …`) until `main` carries
+the change.
 
 ## Phrasing, commits, merges, releases
 
@@ -94,7 +97,12 @@ initiative. `.gitleaks.toml` allows only Ed25519 `did:key` identifiers, which ar
   Commits are signed (SSH).
 - Work lands by PR to `main` as merge commits; never push to `main`. Merging is the orchestrator's
   call on evidence in a gated sprint, the owner's otherwise.
-- Publishing to PyPI is the owner's act, from a tested script with a `DRY_RUN` mode.
+- Publishing to PyPI is the owner's act, through `scripts/publish.sh` from a clean checkout of `main`
+  at the release commit (its header has the details). `DRY_RUN=1` builds the sdist and the wheel,
+  checks them, smoke-tests the wheel in a fresh environment, prints each file's SHA-256 and uploads
+  nothing. The live run, under `op run` with the PyPI token's secret reference, uploads exactly
+  the files the dry run built and reads the release back from PyPI for about five minutes.
+  `READ_BACK=1` runs only the read-back, for a run that stopped after uploading.
 - A CLI upgrade reaches users as a wrapper release that moves the pin: `package.json`,
   `package-lock.json` (`npm install --package-lock-only --ignore-scripts`) and `CLI_VERSION`
   together; `tests/test_version.py` fails on any one left behind.

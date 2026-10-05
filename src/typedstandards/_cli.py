@@ -43,18 +43,20 @@ def _parse(stdout: bytes) -> Any:
     return json.loads(stdout.decode("utf-8"))
 
 
-def run(command: str, args: Sequence[str] = (), *, stdin: bytes | None = None) -> Any:
+def run(command: str, args: Sequence[str] = ()) -> Any:
     """Run one CLI command and return its stdout parsed as JSON.
 
     The child inherits this process's environment: no ``env`` is passed, and nothing here reads
-    or sets a variable for it. What the CLI writes on stderr when it succeeds (attention
-    readings, such as an offline ``registry_unavailable``) is logged at INFO on the
-    ``typedstandards`` logger.
+    or sets a variable for it. Its standard input is the null device: every input reaches the CLI
+    as a file it names, never through a pipe (typedstandards#138). What the CLI writes on stderr
+    when it succeeds (attention readings, such as an offline ``registry_unavailable``) is logged at
+    INFO on the ``typedstandards`` logger.
     """
     node = locate_node()
     entry = cli_entry()
-    feed: dict[str, Any] = {"input": stdin} if stdin is not None else {"stdin": subprocess.DEVNULL}
-    proc = subprocess.run([node, str(entry), command, *args], capture_output=True, check=False, **feed)
+    proc = subprocess.run(
+        [node, str(entry), command, *args], capture_output=True, check=False, stdin=subprocess.DEVNULL
+    )
     stderr = proc.stderr.decode("utf-8", errors="replace")
     code = proc.returncode
     if code == 0:

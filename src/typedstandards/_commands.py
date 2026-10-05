@@ -1,9 +1,11 @@
 """The five pass-through commands: ``sign``, ``withdraw``, ``attest``, ``view``, ``verify``.
 
 Each takes the CLI's inputs as Python values and returns the CLI's stdout parsed as JSON.
-An input given as a mapping is sent as JSON on standard input (``--input -``); a ``str`` or
-``os.PathLike`` is a path the CLI reads. The wrapper computes nothing the format defines: the
-CLI builds, signs, hashes and verifies.
+An input given as a mapping is written as JSON to a temporary file, whose path the CLI reads and
+which is removed before the call returns; a ``str`` or ``os.PathLike`` is a path the CLI reads.
+No input reaches the CLI through a pipe: CLI 0.2.0 reads ``--input -`` with a synchronous read
+that fails with EAGAIN on a document larger than a pipe buffer holds (typedstandards#138). The
+wrapper computes nothing the format defines: the CLI builds, signs, hashes and verifies.
 """
 
 from __future__ import annotations
@@ -11,7 +13,8 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -25,12 +28,17 @@ def _json_bytes(value: Mapping[str, Any]) -> bytes:
     return json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
 
 
-def _input_args(value: Input, flag: str) -> tuple[list[str], bytes | None]:
+@contextmanager
+def _input_args(value: Input, flag: str) -> Iterator[list[str]]:
+    """``[flag, path]`` for one input. A mapping is written to a temporary file, removed when the
+    block exits, whether the CLI succeeded or not."""
     if isinstance(value, Mapping):
-        return [flag, "-"], _json_bytes(value)
-    if isinstance(value, (str, os.PathLike)):
-        return [flag, os.fspath(value)], None
-    raise TypeError(f"{flag} takes a mapping (sent as JSON on stdin) or a path, not {type(value).__name__}")
+        with tempfile.TemporaryDirectory(prefix="typedstandards-input-") as directory:
+            yield [flag, _as_file(value, directory, "input.json", flag)]
+    elif isinstance(value, (str, os.PathLike)):
+        yield [flag, os.fspath(value)]
+    else:
+        raise TypeError(f"{flag} takes a mapping (written to a temporary file) or a path, not {type(value).__name__}")
 
 
 def _as_file(value: Input, directory: str, name: str, what: str) -> str:
@@ -57,27 +65,27 @@ def sign(
     ``{package, envelopeHash, signature}``. The CLI reads the signing seed from its own
     environment, which it inherits from this process.
     """
-    args, stdin = _input_args(input, "--input")
-    if output_file is not None:
-        args += ["--output-file", os.fspath(output_file)]
-    if output_url is not None:
-        args += ["--output-url", output_url]
-    if content_type is not None:
-        args += ["--content-type", content_type]
-    return run("sign", args, stdin=stdin)
+    with _input_args(input, "--input") as args:
+        if output_file is not None:
+            args += ["--output-file", os.fspath(output_file)]
+        if output_url is not None:
+            args += ["--output-url", output_url]
+        if content_type is not None:
+            args += ["--content-type", content_type]
+        return run("sign", args)
 
 
 def withdraw(input: Input) -> dict[str, Any]:
     """``typedstandards withdraw``: sign an ``attestation/withdraws/v1``. Returns ``{node, nodeId, signature}``."""
-    args, stdin = _input_args(input, "--input")
-    return run("withdraw", args, stdin=stdin)
+    with _input_args(input, "--input") as args:
+        return run("withdraw", args)
 
 
 def attest(input: Input) -> dict[str, Any]:
     """``typedstandards attest``: sign a ``supersedes``, ``revises``, ``corroborates`` or ``contradicts``
     attestation. Returns ``{node, nodeId, signature}``."""
-    args, stdin = _input_args(input, "--input")
-    return run("attest", args, stdin=stdin)
+    with _input_args(input, "--input") as args:
+        return run("attest", args)
 
 
 def view(
@@ -93,7 +101,7 @@ def view(
 
     ``signed`` is what :func:`sign` returned (or its path); each of ``attestations`` is what
     :func:`withdraw` or :func:`attest` returned (or its path). Mappings are written to temporary
-    files, removed before this returns, since only one input can be standard input.
+    files, removed before this returns.
     """
     if isinstance(attestations, (Mapping, str, os.PathLike)):
         raise TypeError("attestations takes a list of attestations, not one")
@@ -114,7 +122,8 @@ def _without_trust_registry(value: Input) -> Input:
     """G0 D9 = A, typedstandards#136: CLI 0.2.0's verify exits 2 on a bundle's top-level
     ``trustRegistry``, which host-core inlines in every bundle it serves under a registry. Drop that
     one key from a bundle (a document with ``packageHash``) and change nothing else; any other
-    document, and a bundle file without the key, reach the CLI as given.
+    document, and a bundle file without the key, reach the CLI as given. A bundle that loses the
+    key reaches the CLI as a temporary file, like any mapping, also when it was given as a path.
 
     Remove this workaround when the wrapper pins a CLI whose verify accepts the key.
     """
@@ -148,9 +157,9 @@ def verify(
     """
     if isinstance(blobs, (str, os.PathLike)):
         raise TypeError("blobs takes a list of paths, not one")
-    args, stdin = _input_args(_without_trust_registry(input), "--input")
-    for blob in blobs:
-        args += ["--blob", os.fspath(blob)]
-    if full:
-        args.append("--json")
-    return run("verify", args, stdin=stdin)
+    with _input_args(_without_trust_registry(input), "--input") as args:
+        for blob in blobs:
+            args += ["--blob", os.fspath(blob)]
+        if full:
+            args.append("--json")
+        return run("verify", args)
