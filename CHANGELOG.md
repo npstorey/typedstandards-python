@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-10-05
 
 - Fixed: every mapping input to `sign`, `withdraw`, `attest` and `verify` reaches the CLI as a
   temporary file, removed before the call returns, and no longer on standard input. A document
