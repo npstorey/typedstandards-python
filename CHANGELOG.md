@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: every mapping input to `sign`, `withdraw`, `attest` and `verify` reaches the CLI as a
+  temporary file, removed before the call returns, and no longer on standard input. A document
+  larger than a pipe buffer holds, such as a served bundle that signs a notebook inline, failed
+  with `UsageError` (`--input - cannot be read: EAGAIN`) (npstorey/typedstandards-python#6,
+  npstorey/typedstandards#138). `verify` still drops only a bundle's top-level `trustRegistry`.
+
 ## 0.1.0 — 2026-10-04
 
 - `sign`, `withdraw`, `attest`, `view` and `verify`: pass-throughs to `@typedstandards/cli` 0.2.0,
