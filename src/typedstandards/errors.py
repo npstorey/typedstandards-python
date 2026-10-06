@@ -3,6 +3,8 @@
 The CLI's exit codes 1 to 4 (``packages/cli/src/errors.ts`` in typedstandards) map to the
 four subclasses of :class:`CliError`, each carrying the exit code and the CLI's stderr text.
 A missing or too-old Node is a :class:`NodeLocatorError`, raised before the CLI runs.
+``publish`` and ``publish_attestation`` raise :class:`PublishError`, and
+:class:`PublishRefusedError` for a refusal made before any write.
 """
 
 from __future__ import annotations
@@ -56,3 +58,14 @@ class SeedError(CliError):
 
 class InternalError(CliError):
     """Exit 4: an internal error in the CLI."""
+
+
+class PublishError(RuntimeError):
+    """``publish`` or ``publish_attestation`` did not complete: the GitHub API answered with an
+    error, or the branch moved again after the one retry. The message names the request and
+    GitHub's own message, never a credential."""
+
+
+class PublishRefusedError(PublishError):
+    """``publish`` or ``publish_attestation`` refused the call before any write request: the
+    token, the name, the title, the record, the role or the host's files did not pass a check."""

@@ -13,6 +13,7 @@ from ._cli import run as _run
 from ._commands import attest, sign, verify, view, withdraw
 from ._comparison import comparison_cell
 from ._node import NODE_FLOOR, NODE_OVERRIDE, locate_node
+from ._publish import TOKEN_VARIABLE, GitHubPagesHost, publish, publish_attestation
 from ._show import Shown, show
 from ._sidecar import sidecar
 from .errors import (
@@ -20,6 +21,8 @@ from .errors import (
     CliNotVendoredError,
     InternalError,
     NodeLocatorError,
+    PublishError,
+    PublishRefusedError,
     SeedError,
     UsageError,
     VerificationError,
@@ -43,11 +46,15 @@ __all__ = [
     "NODE_OVERRIDE",
     "CliError",
     "CliNotVendoredError",
+    "GitHubPagesHost",
     "InternalError",
     "NodeLocatorError",
     "Pinned",
+    "PublishError",
+    "PublishRefusedError",
     "SeedError",
     "Shown",
+    "TOKEN_VARIABLE",
     "UsageError",
     "VerificationError",
     "__version__",
@@ -58,6 +65,8 @@ __all__ = [
     "comparison_cell",
     "locate_node",
     "pin",
+    "publish",
+    "publish_attestation",
     "show",
     "sidecar",
     "sign",

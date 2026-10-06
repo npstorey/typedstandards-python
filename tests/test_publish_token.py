@@ -1,0 +1,313 @@
+"""The GitHub token (typedstandards#141 P2, acceptance 1's token line, 2 and 4).
+
+- A token comes from ``token=``, else ``TYPEDSTANDARDS_GITHUB_TOKEN``; one that does not start
+  ``github_pat_``, or that holds whitespace, a quote or ``op://``, is refused before any request,
+  and the refusal's text does not hold the value.
+- No captured stdout, stderr, log record, warning or exception text holds the token's value on
+  any publish path, and the scanner is itself driven over offending paths to show it fails there.
+- No file is opened or written while publishing, and the host's ``repr`` names only the
+  repository and the branch.
+
+The token is visibly fake. Every test drives the fake API through ``httpx.MockTransport``.
+"""
+
+from __future__ import annotations
+
+import builtins
+import contextlib
+import io
+import json
+import logging
+import os
+import pickle
+import sys
+import traceback
+import warnings
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+import httpx
+import pytest
+from github_stub import FakeGitHub  # publish_support puts scripts/ on the path
+from publish_support import TOKEN, Docs, github, host
+
+import typedstandards as ts
+
+#: The part of a fine-grained token after its public prefix: the secret itself.
+SECRET_TAIL = TOKEN[len("github_pat_") :]
+
+
+# --- the scanner ------------------------------------------------------------------------------
+
+
+class _Records(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(level=logging.DEBUG)
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(self.format(record))
+        self.lines.append(repr(record.args))
+
+
+def captured(call: Callable[[], Any]) -> list[tuple[str, str]]:
+    """Run ``call`` with stdout, stderr, every logger at DEBUG and warnings captured. Returns
+    ``(where, text)`` for each: the outputs, each log record (formatted, and its arguments), each
+    warning, the returned value's ``repr``, and an exception's ``str``, ``repr`` and traceback."""
+    out, err = io.StringIO(), io.StringIO()
+    handler = _Records()
+    handler.setFormatter(logging.Formatter("%(name)s %(levelname)s %(message)s"))
+    root = logging.getLogger()
+    level = root.level
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG)
+    texts: list[tuple[str, str]] = []
+    try:
+        with (
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(err),
+            warnings.catch_warnings(record=True) as caught,
+        ):
+            warnings.simplefilter("always")
+            try:
+                texts.append(("return value", repr(call())))
+            except Exception as error:  # every exception's text is scanned
+                texts.append(("exception str", str(error)))
+                texts.append(("exception repr", repr(error)))
+                texts.append(("traceback", "".join(traceback.format_exception(error))))
+        texts += [("warning", str(w.message)) for w in caught]
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(level)
+    texts += [("stdout", out.getvalue()), ("stderr", err.getvalue())]
+    texts += [("log record", line) for line in handler.lines]
+    return texts
+
+
+def leaks(token: str, texts: list[tuple[str, str]]) -> list[str]:
+    """Where the token's value, or its secret part, appears in captured text."""
+    tail = token[len("github_pat_") :] if token.startswith("github_pat_") else token
+    return sorted({where for where, text in texts if token in text or (tail and tail in text)})
+
+
+# --- every publish path, scanned -------------------------------------------------------------
+
+
+def publish_paths(docs: Docs) -> dict[str, Callable[[], Any]]:
+    """Each path of acceptance 1 as a call, on a fresh fake host per call."""
+
+    def run(listed: dict | None = None, setup: Callable[[FakeGitHub], None] | None = None, **kwargs: Any):
+        def call() -> Any:
+            gh = github(docs, listed=listed)
+            if setup:
+                setup(gh)
+            target = kwargs.pop("_target", "publish")
+            if target == "attestation":
+                return ts.publish_attestation(docs.withdrawal, host=host(gh), name="dog-licensing")
+            return ts.publish(kwargs.pop("_signed", docs.first), host=host(gh), **kwargs)
+
+        return call
+
+    first = {"dog-licensing": docs.first}
+    return {
+        "a new record": run(name="dog-licensing", title="T"),
+        "the default name": run(notebook="dog-licensing.ipynb", title="T"),
+        "a listed hash": run(first, name="dog-licensing", title="T"),
+        "a listed name, refused": run(first, _signed=docs.second, name="dog-licensing", title="T"),
+        "a listed name, revises": run(
+            first, _signed=docs.second, name="dog-licensing", title="T", revises=docs.revises
+        ),
+        "a records segment": run(name="records/x", title="T"),
+        "a name failing the rule": run(name="a b", title="T"),
+        "a BlobRef output": run(_signed=docs.blobref, name="x", title="T"),
+        "another signer": run(_signed=docs.foreign, name="x", title="T"),
+        "a role no rule admits": run(name="x", title="T", role="claim"),
+        "an empty title": run(name="x", title=""),
+        "a non-fast-forward, retried": run(setup=lambda gh: setattr(gh, "concurrent_writes", 1), name="x", title="T"),
+        "a non-fast-forward, twice": run(setup=lambda gh: setattr(gh, "concurrent_writes", 2), name="x", title="T"),
+        "a ref update that landed": run(setup=lambda gh: setattr(gh, "landed_but_failed", [502]), name="x", title="T"),
+        "an attestation": run(first, _target="attestation"),
+        "an API error": run(setup=lambda gh: setattr(gh, "token", "github_pat_other"), name="x", title="T"),
+    }
+
+
+def test_no_output_holds_the_token_on_any_publish_path(docs: Docs) -> None:
+    found = {}
+    for label, call in publish_paths(docs).items():
+        texts = captured(call)
+        assert texts, label
+        if leaks(TOKEN, texts):
+            found[label] = leaks(TOKEN, texts)
+    assert found == {}
+
+
+def test_the_paths_raise_and_log_what_they_should(docs: Docs) -> None:
+    """The scan above reads real text: refusals raise, and a write logs its requests."""
+    texts = captured(publish_paths(docs)["a records segment"])
+    assert any(where == "exception str" and "records" in text for where, text in texts)
+    texts = captured(publish_paths(docs)["a new record"])
+    assert any(where == "log record" and "git/refs/heads/main" in text for where, text in texts)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "github_pat_TESTONLY with a space",
+        "github_pat_TESTONLY_trailing_newline\n",
+        "\tgithub_pat_TESTONLY_leading_tab",
+        '"github_pat_TESTONLY_double_quoted"',
+        "'github_pat_TESTONLY_single_quoted'",
+        "op://Example Vault/example item/credential",
+        "github_pat_TESTONLY_op://unresolved",
+        "ghp_TESTONLYclassicshape",
+        "TESTONLYnoprefixatall",
+        "github_pat_",
+    ],
+)
+def test_a_token_of_the_wrong_shape_is_refused_without_its_value(docs: Docs, value: str) -> None:
+    gh = github(docs)
+    bad = ts.GitHubPagesHost(gh.repository, token=value, transport=gh.transport())
+    texts = captured(lambda: ts.publish(docs.first, host=bad, name="dog-licensing", title="T"))
+    error = next(text for where, text in texts if where == "exception repr")
+    assert error.startswith("PublishRefusedError(")
+    if value != "github_pat_":  # the bare prefix is in the refusal's own words
+        assert leaks(value, texts) == [] and leaks(value.strip("\"' \t\n"), texts) == []
+    assert gh.requests == []
+
+
+def test_a_wrong_token_from_the_environment_is_refused_without_its_value(
+    docs: Docs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = "github_pat_TESTONLY from the environment"
+    monkeypatch.setenv(ts.TOKEN_VARIABLE, value)
+    gh = github(docs)
+    texts = captured(
+        lambda: ts.publish(
+            docs.first, host=ts.GitHubPagesHost(gh.repository, transport=gh.transport()), name="x", title="T"
+        )
+    )
+    assert any(where == "exception str" and ts.TOKEN_VARIABLE in text for where, text in texts)
+    assert leaks(value, texts) == []
+    assert gh.requests == []
+
+
+def test_no_token_is_refused(docs: Docs, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(ts.TOKEN_VARIABLE, raising=False)
+    gh = github(docs)
+    with pytest.raises(ts.PublishRefusedError, match="TYPEDSTANDARDS_GITHUB_TOKEN"):
+        ts.publish(docs.first, host=ts.GitHubPagesHost(gh.repository, transport=gh.transport()), name="x", title="T")
+    assert gh.requests == []
+
+
+# --- the scanner fails on an offender ------------------------------------------------------------
+
+
+def _offender(docs: Docs, how: str) -> Callable[[], Any]:
+    """A publish whose transport leaks the Authorization header one way."""
+
+    def call() -> Any:
+        gh = github(docs)
+
+        def leak(request: httpx.Request) -> None:
+            value = request.headers["authorization"]
+            if how == "stdout":
+                print(value)
+            elif how == "stderr":
+                print(value, file=sys.stderr)
+            elif how == "log record":
+                logging.getLogger("typedstandards").debug("sent %s", value)
+            elif how == "warning":
+                warnings.warn(f"sent {value}", stacklevel=1)
+            elif how == "exception":
+                raise RuntimeError(f"sent {value}")
+            return None
+
+        gh.hook = leak
+        return ts.publish(docs.first, host=host(gh), name="dog-licensing", title="T")
+
+    return call
+
+
+@pytest.mark.parametrize("how", ["stdout", "stderr", "log record", "warning", "exception"])
+def test_the_scanner_fails_on_an_offender(docs: Docs, how: str) -> None:
+    found = leaks(TOKEN, captured(_offender(docs, how)))
+    expected = {"exception": "exception str"}.get(how, how)
+    assert expected in found
+
+
+def test_the_scanner_finds_the_secret_part_alone() -> None:
+    assert leaks(TOKEN, [("stdout", f"…{SECRET_TAIL}")]) == ["stdout"]
+    assert leaks(TOKEN, [("stdout", "github_pat_ and nothing else")]) == []
+
+
+# --- acceptance 4 -------------------------------------------------------------------------------
+
+
+def test_the_token_comes_from_the_argument_else_the_environment(docs: Docs, monkeypatch: pytest.MonkeyPatch) -> None:
+    gh = github(docs)
+    monkeypatch.setenv(ts.TOKEN_VARIABLE, TOKEN)
+    from_env = ts.GitHubPagesHost(gh.repository, transport=gh.transport())
+    assert ts.publish(docs.first, host=from_env, name="a", title="T")["written"] is True
+
+    monkeypatch.setenv(ts.TOKEN_VARIABLE, "github_pat_TESTONLY_the_environments")
+    assert ts.publish(docs.first, host=host(gh), name="b", title="T")["written"] is True  # token= wins
+    with pytest.raises(ts.PublishError, match="401"):
+        ts.publish(docs.first, host=ts.GitHubPagesHost(gh.repository, transport=gh.transport()), name="c", title="T")
+
+
+def test_the_environment_is_read_when_publishing(docs: Docs, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A host made before the variable is set (a notebook's first cell) still finds it."""
+    monkeypatch.delenv(ts.TOKEN_VARIABLE, raising=False)
+    gh = github(docs)
+    made_first = ts.GitHubPagesHost(gh.repository, transport=gh.transport())
+    monkeypatch.setenv(ts.TOKEN_VARIABLE, TOKEN)
+    assert ts.publish(docs.first, host=made_first, name="a", title="T")["written"] is True
+
+
+def test_publishing_opens_and_writes_no_file(docs: Docs, monkeypatch: pytest.MonkeyPatch) -> None:
+    opened: list[str] = []
+    real_open, real_os_open = builtins.open, os.open
+
+    def recording_open(file: Any, *args: Any, **kwargs: Any) -> Any:
+        opened.append(f"open {file}")
+        return real_open(file, *args, **kwargs)
+
+    def recording_os_open(path: Any, *args: Any, **kwargs: Any) -> Any:
+        opened.append(f"os.open {path}")
+        return real_os_open(path, *args, **kwargs)
+
+    gh = github(docs, listed={"dog-licensing": docs.first})
+    target = host(gh)
+    monkeypatch.setattr(builtins, "open", recording_open)
+    monkeypatch.setattr(os, "open", recording_os_open)
+    for method in ("write_text", "write_bytes", "touch", "open"):
+        monkeypatch.setattr(Path, method, lambda self, *a, _m=method, **k: opened.append(f"Path.{_m} {self}"))
+    ts.publish(docs.second, host=target, name="dog-licensing", title="T", revises=docs.revises)
+    ts.publish_attestation(docs.withdrawal, host=target, name="dog-licensing")
+    assert opened == []
+
+
+def test_the_hosts_repr_shows_the_repository_and_branch_only() -> None:
+    made = ts.GitHubPagesHost("example-owner/example-host", token=TOKEN)
+    assert repr(made) == "GitHubPagesHost('example-owner/example-host', branch='main')"
+    assert str(made) == repr(made)
+    other = ts.GitHubPagesHost("example-owner/example-host", branch="pages", token=TOKEN)
+    assert repr(other) == "GitHubPagesHost('example-owner/example-host', branch='pages')"
+
+
+def test_the_host_does_not_expose_the_token() -> None:
+    made = ts.GitHubPagesHost("example-owner/example-host", token=TOKEN)
+    with pytest.raises(TypeError):
+        vars(made)
+    with pytest.raises(TypeError):
+        pickle.dumps(made)
+    texts = [repr(getattr(made, name, None)) for name in dir(made)]
+    assert leaks(TOKEN, [("attribute", text) for text in texts]) == []
+    assert TOKEN not in json.dumps(texts)
+
+
+@pytest.mark.parametrize("repository", ["", "example-owner", "a/b/c", "https://github.com/a/b", "a b/c"])
+def test_a_repository_that_is_not_owner_slash_name_is_refused(repository: str) -> None:
+    with pytest.raises(ValueError, match="owner/name"):
+        ts.GitHubPagesHost(repository, token=TOKEN)
