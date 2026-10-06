@@ -6,9 +6,11 @@ the environment, as CI's wheel job does:
     TYPEDSTANDARDS_SIGNING_SEED_B64="$(openssl rand -base64 32)" <venv>/bin/python scripts/smoke_wheel.py
 
 It checks the import, CLI_VERSION, the vendored CLI's --version, the vendored tree's licences,
-one sign-then-verify round trip (sign, view, verify) through the vendored CLI, and the five
-helpers with the runtime dependencies the wheel declares (httpx for pin, PyYAML for sidecar),
-offline: pin over httpx.MockTransport. It reads no seed.
+one sign-then-verify round trip (sign, view, verify) through the vendored CLI, the five
+helpers with the runtime dependencies the wheel declares (httpx for pin, PyYAML for sidecar), and
+publish and publish_attestation, offline: pin and publish over httpx.MockTransport, publish against
+the in-memory GitHub API in github_stub.py beside this script, with a visibly fake token. It reads
+no seed.
 """
 
 from __future__ import annotations
@@ -65,6 +67,7 @@ def main() -> int:
     assert result["ok"] is True
     assert result["nodeId"] == signed["envelopeHash"]
     helpers(record)
+    publishing(signed)
     print("smoke check passed")
     return 0
 
@@ -103,6 +106,32 @@ def helpers(record: dict) -> None:
         html = typedstandards.show(bundle, result)._repr_html_()
         assert "Signed with a self-certifying key" in html
     print("helpers: pin, badge_cell, comparison_cell, sidecar and show ran from the installed wheel")
+
+
+def publishing(signed: dict) -> None:
+    from github_stub import FakeGitHub, dumps, manifest, policy
+
+    token = "github_pat_TESTONLY_wheel_smoke"
+    signer = signed["package"]["signer"]
+    files = {"host.json": dumps(manifest()), "host-policy.json": dumps(policy(signer["identifier"]))}
+    gh = FakeGitHub(files, token=token)
+    host = typedstandards.GitHubPagesHost(gh.repository, token=token, transport=gh.transport())
+    receipt = typedstandards.publish(signed, host=host, name="smoke/record", title="Smoke check")
+    assert receipt["written"] is True and receipt["commit"] == gh.head, receipt
+    assert [m for m, _ in gh.requests] == ["GET"] * 4 + ["POST"] * 4 + ["PATCH"], gh.requests
+    assert typedstandards.publish(signed, host=host, name="smoke/record", title="Smoke check")["written"] is False
+    withdrawal = typedstandards.withdraw(
+        {"targetNodeId": signed["envelopeHash"], "reason": "The wheel's smoke check.", "signer": signer}
+    )
+    assert typedstandards.publish_attestation(withdrawal, host=host, name="smoke/record")["written"] is True
+    assert repr(host) == f"GitHubPagesHost({gh.repository!r}, branch='main')"
+    try:
+        typedstandards.publish(signed, host=host, name="records/x", title="Smoke check")
+    except typedstandards.PublishRefusedError:
+        pass
+    else:
+        raise AssertionError("a records segment was not refused")
+    print(f"publish: {receipt['bundle_url']} in one commit, then a no-op, then a withdrawal, over MockTransport")
 
 
 if __name__ == "__main__":

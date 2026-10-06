@@ -98,8 +98,9 @@ class FakeGitHub:
     # --- state -------------------------------------------------------------------------------
 
     def _id(self, kind: str) -> str:
+        """A fresh 40-hex object id (a counter; ``kind`` is for the reader)."""
         self._count += 1
-        return f"{kind}{self._count:039x}"
+        return f"{self._count:040x}"
 
     def files_at(self, commit: str | None = None) -> dict[str, bytes]:
         return self.trees[self.commits[commit or self.head]["tree"]]

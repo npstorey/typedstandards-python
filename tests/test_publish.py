@@ -410,14 +410,15 @@ def test_a_non_fast_forward_retry_sees_a_record_another_writer_listed(docs: Docs
             )
             files["host.json"] = dumps(manifest)
             files["records/dog-licensing.signed.json"] = dumps(docs.first)
-            gh.trees["t-other"] = files
-            gh.commits["c-other"] = {"tree": "t-other", "parents": [gh.head], "message": "another writer"}
-            gh.head = "c-other"
+            tree, commit = gh._id("t"), gh._id("c")
+            gh.trees[tree] = files
+            gh.commits[commit] = {"tree": tree, "parents": [gh.head], "message": "another writer"}
+            gh.head = commit
         return None
 
     gh.hook = other_writer_publishes_the_same
     receipt = ts.publish(docs.first, host=host(gh), name="dog-licensing", title="Dog licensing")
-    assert receipt["written"] is False and gh.head == "c-other"
+    assert receipt["written"] is False and gh.commits[gh.head]["message"] == "another writer"
     assert [m for m, _ in gh.requests].count("PATCH") == 1
 
 
