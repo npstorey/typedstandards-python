@@ -94,7 +94,8 @@ class GitHubPagesHost:
     for this one repository, with Contents read and write. Its ``repr`` names the repository and
     the branch only. ``client`` (used as given, not closed) or ``transport`` (for a client each
     call builds and closes), ``api_url`` and ``timeout`` are for tests and for callers with their
-    own HTTP settings; redirects are never followed.
+    own HTTP settings; redirects are never followed. The client a call builds ignores proxy and
+    certificate environment variables; pass ``client=`` for those.
     """
 
     __slots__ = ("repository", "branch", "api_url", "timeout", "_token", "_client", "_transport")
@@ -182,8 +183,15 @@ class _Api:
         }
         self._own = host._client is None
         if host._client is None:
+            # trust_env=False: building the client does not iterate the environment (which holds the
+            # signing seed) for proxy settings, and reads no .netrc. A caller who needs a proxy or a
+            # certificate bundle passes client=.
             self._http = httpx.Client(
-                headers=headers, transport=host._transport, timeout=host.timeout, follow_redirects=False
+                headers=headers,
+                transport=host._transport,
+                timeout=host.timeout,
+                follow_redirects=False,
+                trust_env=False,
             )
             self._headers: dict[str, str] = {}
         else:

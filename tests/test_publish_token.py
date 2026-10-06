@@ -311,3 +311,22 @@ def test_the_host_does_not_expose_the_token() -> None:
 def test_a_repository_that_is_not_owner_slash_name_is_refused(repository: str) -> None:
     with pytest.raises(ValueError, match="owner/name"):
         ts.GitHubPagesHost(repository, token=TOKEN)
+
+
+def test_publishing_reads_the_token_variable_and_never_the_whole_environment(
+    docs: Docs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The client a call builds (no transport given) does not iterate os.environ, which holds the
+    seed, for proxy settings. The autouse guard stops the request at the socket."""
+    from support import SEED_VARIABLE
+    from test_guards import RecordingEnviron
+
+    monkeypatch.setenv(ts.TOKEN_VARIABLE, TOKEN)
+    monkeypatch.setenv(SEED_VARIABLE, "not-a-seed")
+    recorder = RecordingEnviron(os.environ)
+    monkeypatch.setattr(os, "environ", recorder)
+    with pytest.raises(Exception, match="network connection"):
+        ts.publish(docs.first, host=ts.GitHubPagesHost("example-owner/example-host"), name="x", title="T")
+    assert ts.TOKEN_VARIABLE in recorder.keys_read
+    assert SEED_VARIABLE not in recorder.keys_read
+    assert recorder.read_all is False
