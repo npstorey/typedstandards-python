@@ -112,7 +112,8 @@ def test_readme_documents_the_calls_receipt_and_token() -> None:
         assert phrase in section, phrase
     for key in ("name", "commit", "bundle_url", "verify_url", "registry_url", "written", "run"):
         assert f"`{key}`" in section, key
-    assert section.index("default name") < section.index("revises=")
+    # The seat's note on G0-4: the default name leads; the derived name is the explicit-name case.
+    assert section.index("The **default name**") < section.index("`<name>-<its first eight hex>`")
 
 
 def test_the_seed_scanner_reads_python_modules_only(tmp_path: Path) -> None:

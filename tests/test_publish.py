@@ -537,3 +537,12 @@ def test_template_fixture_is_the_verbatim_copy(name: str) -> None:
     import hashlib
 
     assert hashlib.sha256((FIXTURES / name).read_bytes()).hexdigest() == TEMPLATE_PINNED[name]
+
+
+def test_publishing_needs_no_node(docs: Docs, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv(ts.NODE_OVERRIDE, str(tmp_path / "no-node-here"))
+    with pytest.raises(ts.NodeLocatorError):
+        ts.locate_node()
+    gh = github(docs)
+    assert ts.publish(docs.first, host=host(gh), name="dog-licensing", title="T")["written"] is True
+    assert ts.publish_attestation(docs.withdrawal, host=host(gh), name="dog-licensing")["written"] is True
