@@ -54,7 +54,8 @@ class _Records(logging.Handler):
 def captured(call: Callable[[], Any]) -> list[tuple[str, str]]:
     """Run ``call`` with stdout, stderr, every logger at DEBUG and warnings captured. Returns
     ``(where, text)`` for each: the outputs, each log record (formatted, and its arguments), each
-    warning, the returned value's ``repr``, and an exception's ``str``, ``repr`` and traceback."""
+    warning, the returned value's ``repr``, and an exception's ``str``, ``repr`` and traceback,
+    also with each frame's locals."""
     out, err = io.StringIO(), io.StringIO()
     handler = _Records()
     handler.setFormatter(logging.Formatter("%(name)s %(levelname)s %(message)s"))
@@ -76,6 +77,9 @@ def captured(call: Callable[[], Any]) -> list[tuple[str, str]]:
                 texts.append(("exception str", str(error)))
                 texts.append(("exception repr", repr(error)))
                 texts.append(("traceback", "".join(traceback.format_exception(error))))
+                # What a verbose notebook traceback (IPython's %xmode Verbose) shows: each frame's locals.
+                with_locals = traceback.TracebackException.from_exception(error, capture_locals=True)
+                texts.append(("traceback with locals", "".join(with_locals.format())))
         texts += [("warning", str(w.message)) for w in caught]
     finally:
         root.removeHandler(handler)
@@ -221,6 +225,8 @@ def _offender(docs: Docs, how: str) -> Callable[[], Any]:
                 warnings.warn(f"sent {value}", stacklevel=1)
             elif how == "exception":
                 raise RuntimeError(f"sent {value}")
+            elif how == "frame local":
+                raise RuntimeError("a frame holding the header as a local raised")
             return None
 
         gh.hook = leak
@@ -229,10 +235,10 @@ def _offender(docs: Docs, how: str) -> Callable[[], Any]:
     return call
 
 
-@pytest.mark.parametrize("how", ["stdout", "stderr", "log record", "warning", "exception"])
+@pytest.mark.parametrize("how", ["stdout", "stderr", "log record", "warning", "exception", "frame local"])
 def test_the_scanner_fails_on_an_offender(docs: Docs, how: str) -> None:
     found = leaks(TOKEN, captured(_offender(docs, how)))
-    expected = {"exception": "exception str"}.get(how, how)
+    expected = {"exception": "exception str", "frame local": "traceback with locals"}.get(how, how)
     assert expected in found
 
 
