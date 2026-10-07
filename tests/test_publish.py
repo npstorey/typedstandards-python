@@ -546,3 +546,30 @@ def test_publishing_needs_no_node(docs: Docs, monkeypatch: pytest.MonkeyPatch, t
     gh = github(docs)
     assert ts.publish(docs.first, host=host(gh), name="dog-licensing", title="T")["written"] is True
     assert ts.publish_attestation(docs.withdrawal, host=host(gh), name="dog-licensing")["written"] is True
+
+
+def test_the_first_publish_to_a_copy_in_its_starting_state(docs: Docs) -> None:
+    """A publish-mode copy starts with ``"records": []`` and no ``records/`` directory (the template's
+    README, setup step 5, at P1's 09fb6a5): the first publish appends the first entry, and the tree
+    on ``base_tree`` creates ``records/<name>.signed.json``."""
+    empty = template_manifest()
+    empty["records"] = []
+    files = {"host.json": dumps(empty), "host-policy.json": dumps(template_policy(docs.signer))}
+    gh = FakeGitHub(files, token=TOKEN)
+    assert not any(path.startswith("records/") for path in gh.files_at())
+    start = gh.head
+    receipt = ts.publish(docs.first, host=host(gh), notebook="dog-licensing.ipynb", title="Dog licensing")
+    assert gh.requests == paths(gh, start) + writes(gh, blobs=2)
+    name = receipt["name"]
+    assert gh.json_at("host.json")["records"] == [
+        {
+            "name": name,
+            "signed": f"records/{name}.signed.json",
+            "attestations": [],
+            "title": "Dog licensing",
+            "extensions": {"role": "notebook"},
+        }
+    ]
+    assert json.loads(gh.files_at()[f"records/{name}.signed.json"]) == docs.first
+    tree_body = next(b for (m, p), b in zip(gh.requests, gh.bodies, strict=True) if p.endswith("/git/trees"))
+    assert {item["path"] for item in tree_body["tree"]} == {f"records/{name}.signed.json", "host.json"}

@@ -125,3 +125,11 @@ def test_the_seed_scanner_reads_python_modules_only(tmp_path: Path) -> None:
     assert seed_references(tmp_path) == []
     (tmp_path / "module.py").write_text("# TYPEDSTANDARDS_SIGNING_SEED_B64\n", encoding="utf-8")
     assert seed_references(tmp_path) == ["module.py:1: names TYPEDSTANDARDS_SIGNING_SEED_B64"]
+
+
+def test_readme_shows_how_to_read_the_did_key_before_the_first_publish() -> None:
+    """The template's setup sets host-policy.json's signer to the author's did:key, which the CLI
+    prints only in what it signs: the README shows reading it from a signed record."""
+    section = " ".join(_publishing_section().split())
+    assert 'signed["package"]["signer"]["identifier"]' in section
+    assert "typedstandards-host-template#publishing-from-a-notebook" in section
