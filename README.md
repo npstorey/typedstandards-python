@@ -201,7 +201,19 @@ are not dependencies.
 [host template](https://github.com/npstorey/typedstandards-host-template) in its publish mode,
 whose workflow builds the site from the repository's `host.json` and deploys it to GitHub Pages.
 Each call is one commit, made through GitHub's Git Data API; the host's workflow then builds and
-deploys it. `publish` does not wait for the deploy.
+deploys it. `publish` does not wait for the deploy. The template's README sets a host up for this:
+[Publishing from a notebook](https://github.com/npstorey/typedstandards-host-template#publishing-from-a-notebook).
+
+That setup names your key in `host-policy.json`'s `signer`, and `publish` refuses a record signed
+by any other key. The CLI prints a `did:key` only in what it signs, so read yours from the first
+record you sign, before its first publish:
+
+```python
+signed = ts.sign(record, output_file="dog-licensing.ipynb")
+signed["package"]["signer"]["identifier"]  # did:key:z6Mk…: the policy's signer
+```
+
+A copy starts with no records; its first publish adds the first.
 
 ```python
 import typedstandards as ts
