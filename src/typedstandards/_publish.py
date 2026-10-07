@@ -136,25 +136,34 @@ class GitHubPagesHost:
         raise TypeError("a GitHubPagesHost is not pickled: it may hold a token")
 
     def _resolve_token(self) -> str:
-        """The token, checked before any request. A refusal never holds the value."""
-        given = self._token is not None
+        """The token, checked before any request. A refusal holds no part of the value: not in its
+        message, and not as a local of any frame its traceback shows (a verbose notebook
+        traceback prints frames' locals)."""
         value = self._token.reveal() if self._token is not None else os.environ.get(TOKEN_VARIABLE)
-        source = "token=" if given else TOKEN_VARIABLE
-        if not value:
-            _refuse(
-                f"no GitHub token: pass token= or set {TOKEN_VARIABLE} (a fine-grained personal access token "
-                "for this one repository, with Contents read and write)"
-            )
-        if "op://" in value:
-            _refuse(f"{source} holds an op:// secret reference: the secret store did not resolve it")
-        if re.search(r"[\s\"']", value):
-            _refuse(f"{source} holds whitespace or a quote: pass the token's characters only")
-        if not value.startswith(FINE_GRAINED_PREFIX) or value == FINE_GRAINED_PREFIX:
-            _refuse(
-                f"{source} is not a fine-grained personal access token (one starts {FINE_GRAINED_PREFIX}): "
-                "make one for this repository alone, with Contents read and write"
-            )
-        return value
+        problem = _token_problem(value, "token=" if self._token is not None else TOKEN_VARIABLE)
+        if problem is not None:
+            del value
+            _refuse(problem)
+        return value  # type: ignore[return-value]  # _token_problem refuses None and ""
+
+
+def _token_problem(value: str | None, source: str) -> str | None:
+    """Why ``value`` is not a usable token, in words that never quote it; ``None`` when it is."""
+    if not value:
+        return (
+            f"no GitHub token: pass token= or set {TOKEN_VARIABLE} (a fine-grained personal access token "
+            "for this one repository, with Contents read and write)"
+        )
+    if "op://" in value:
+        return f"{source} holds an op:// secret reference: the secret store did not resolve it"
+    if re.search(r"[\s\"']", value):
+        return f"{source} holds whitespace or a quote: pass the token's characters only"
+    if not value.startswith(FINE_GRAINED_PREFIX) or value == FINE_GRAINED_PREFIX:
+        return (
+            f"{source} is not a fine-grained personal access token (one starts {FINE_GRAINED_PREFIX}): "
+            "make one for this repository alone, with Contents read and write"
+        )
+    return None
 
 
 def _refuse(message: str) -> NoReturn:
@@ -175,19 +184,14 @@ class _Api:
         self._httpx = httpx
         self.host = host
         self.base = f"{host.api_url}/repos/{host.repository}"
-        headers = {
-            "Authorization": f"Bearer {host._resolve_token()}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "typedstandards-python",
-        }
         self._own = host._client is None
+        # The headers are built inside each call below, so no frame holds them as a local.
         if host._client is None:
             # trust_env=False: building the client does not iterate the environment (which holds the
             # signing seed) for proxy settings, and reads no .netrc. A caller who needs a proxy or a
             # certificate bundle passes client=.
             self._http = httpx.Client(
-                headers=headers,
+                headers=_headers(host),
                 transport=host._transport,
                 timeout=host.timeout,
                 follow_redirects=False,
@@ -196,18 +200,20 @@ class _Api:
             self._headers: dict[str, str] = {}
         else:
             self._http = host._client
-            self._headers = headers
+            self._headers = _headers(host)
 
     def close(self) -> None:
         if self._own:
             self._http.close()
 
+    def _request_headers(self, accept: str | None) -> dict[str, str]:
+        return {**self._headers, **({"Accept": accept} if accept is not None else {})}
+
     def _send(self, method: str, path: str, body: Any = None, *, accept: str | None = None) -> httpx.Response:
-        headers = dict(self._headers)
-        if accept is not None:
-            headers["Accept"] = accept
         try:
-            response = self._http.request(method, self.base + path, json=body, headers=headers, follow_redirects=False)
+            response = self._http.request(
+                method, self.base + path, json=body, headers=self._request_headers(accept), follow_redirects=False
+            )
         except self._httpx.TransportError as error:
             _log.info("publish: %s %s -> no response (%s)", method, path, type(error).__name__)
             raise _NoResponse(f"{method} {path}: no response ({type(error).__name__})") from None
@@ -252,6 +258,15 @@ class _Api:
     def head(self) -> str:
         sha = self.get_json(f"/git/ref/heads/{self.host.branch}").get("object", {}).get("sha")
         return _object_id(sha, f"the head of {self.host.branch}")
+
+
+def _headers(host: GitHubPagesHost) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {host._resolve_token()}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "typedstandards-python",
+    }
 
 
 class _ApiError(PublishError):
