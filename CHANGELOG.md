@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-10-09
 
 - `publish(signed, *, host, title, name=None, notebook=None, role="notebook", revises=None)` and
   `publish_attestation(node, *, host, name)`: write a signed record, or a withdrawal or other
