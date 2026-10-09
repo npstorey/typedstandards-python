@@ -8,14 +8,21 @@ provenance is recorded here.
 |---|---|---|---|---|---|
 | `reference-golden.json` | `npstorey/typedstandards`, `packages/produce-core/src/__fixtures__/reference-golden.json` | `116882a` | `ea75a1d` | `d2bcfc2bc017b07502b3b00c3aa16de402df134128a374b4582650b79fb501c1` | `tests/test_golden.py` |
 | `first-note.bundle.json` | `npstorey/typedstandards-host-template`, `docs/bundles/first-note.bundle.json` | `70bfd18` | `26dff9b` | `cb11d2a229c9695db6c7f4d6c9349ccee14f14af6c39844886480699ba2401ba` | `tests/test_d9.py` |
+| `template-host.json` | `npstorey/typedstandards-host-template`, `host.json` | `70bfd18` | `26dff9b` | `8a80c9ea344196ac2b27b3a91eb3439f9217e72c5491b18540d253925b28a6fe` | `tests/test_publish.py` |
+| `template-host-policy.json` | `npstorey/typedstandards-host-template`, `host-policy.json` | `70bfd18` | `8b88a98` | `9150db40fee1f2e17bf09d128c080f0bee9a3ac0c8bda9dbd0467e11a144c0f8` | `tests/test_publish.py` |
 
-Re-derive either copy with `git -C <repository> show <commit>:<path> > tests/fixtures/<file>`.
+Re-derive any copy with `git -C <repository> show <commit>:<path> > tests/fixtures/<file>`.
 
 - **`reference-golden.json`** holds 9 envelope cases and 6 attestation cases, captured from the
   reference implementation as its `_meta` records. No npm tarball ships it, so the tests carry
   this copy. `tests/test_golden.py` replays the 9 envelope cases through `sign` and the
   `withdraws` case through `withdraw`. It carries the reference platform's own identifiers, as it
   does in its source repository.
+- **`template-host.json`** and **`template-host-policy.json`** are the files a host made from the
+  template starts with. `tests/test_publish.py` starts its fake host's `main` from them: the
+  manifest as is, and the policy with its `signer` set to the test key and `notebook` added to the
+  active rule's roles, as the template's publish mode does (typedstandards#141 G0-3). One test
+  keeps the policy as shipped and shows `publish`'s default role refused under it.
 - **`first-note.bundle.json`** is the bundle the host template serves, written by
   `@typedstandards/host-core` 0.1.1 with a top-level `trustRegistry`. `tests/test_d9.py` verifies
   it through the wrapper, which drops that key before the CLI sees it (typedstandards#136).

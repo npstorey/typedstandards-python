@@ -9,6 +9,7 @@ import subprocess
 from typing import Any
 
 import pytest
+from publish_support import Docs, make_docs
 from support import SEED_VARIABLE, NetworkBlocked, fresh_seed_b64
 
 
@@ -89,3 +90,9 @@ def spawned(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
     monkeypatch.setattr(subprocess, "Popen", RecordingPopen)
     return calls
+
+
+@pytest.fixture(scope="session")
+def docs(tmp_path_factory: pytest.TempPathFactory) -> Docs:
+    """The publish tests' records and attestations, signed once by the vendored CLI."""
+    return make_docs(tmp_path_factory.mktemp("publish"))

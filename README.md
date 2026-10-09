@@ -25,8 +25,8 @@ The wrapper looks for Node in this order:
 Only the calls that run the CLI need Node: `sign`, `withdraw`, `attest`, `view`, `verify`,
 `cli_version()`, and `show` without a precomputed result. With no Node, or one older than 20.19.0,
 each of those raises `typedstandards.NodeLocatorError`, whose message names the floor and
-`TYPEDSTANDARDS_NODE`. `pin`, `badge_cell`, `comparison_cell`, `sidecar` and
-`show(record, result)` run without Node.
+`TYPEDSTANDARDS_NODE`. `pin`, `badge_cell`, `comparison_cell`, `sidecar`, `show(record, result)`,
+`publish` and `publish_attestation` run without Node.
 
 Linux and macOS are tested. Windows is untested.
 
@@ -190,9 +190,178 @@ ts.show(bundle)  # in Jupyter; ts.show(bundle, marimo=True) in Marimo
   string or a list of strings); `show` labels it as the signer's and checks nothing about it.
 
 The notebook helpers edit the notebook as JSON, splicing the new cell into `cells` so every
-other byte of the file stays as written. `httpx` is imported only inside `pin`, PyYAML only
+other byte of the file stays as written. `httpx` is imported only inside `pin` and the publish
+calls, PyYAML only
 inside `sidecar`, and `marimo` only inside a Marimo call; `IPython`, `marimo` and `nbformat`
 are not dependencies.
+
+## Publishing to a GitHub Pages host
+
+`publish` writes a signed record to a GitHub repository made from the
+[host template](https://github.com/npstorey/typedstandards-host-template) in its publish mode,
+whose workflow builds the site from the repository's `host.json` and deploys it to GitHub Pages.
+Each call is one commit, made through GitHub's Git Data API; the host's workflow then builds and
+deploys it. `publish` does not wait for the deploy. The template's README sets a host up for this:
+[Publishing from a notebook](https://github.com/npstorey/typedstandards-host-template#publishing-from-a-notebook).
+
+That setup names your key in `host-policy.json`'s `signer`, and `publish` refuses a record signed
+by any other key. The CLI prints a `did:key` only in what it signs, so read yours from the first
+record you sign, before its first publish:
+
+```python
+signed = ts.sign(record, output_file="dog-licensing.ipynb")
+signed["package"]["signer"]["identifier"]  # did:key:z6Mk…: the policy's signer
+```
+
+A copy starts with no records; its first publish adds the first.
+
+```python
+import typedstandards as ts
+
+host = ts.GitHubPagesHost("owner/repo")  # branch="main"; the token from TYPEDSTANDARDS_GITHUB_TOKEN
+signed = ts.sign(record, output_file="dog-licensing.ipynb")  # record: an envelope input, as under Use
+receipt = ts.publish(signed, host=host, notebook="dog-licensing.ipynb", title="Dog licensing by district")
+receipt["verify_url"]  # the verifier's link for the served bundle
+
+withdrawal = ts.withdraw(
+    {"targetNodeId": signed["envelopeHash"], "reason": "...", "signer": signed["package"]["signer"]}
+)
+ts.publish_attestation(withdrawal, host=host, name=receipt["name"])
+```
+
+- **`GitHubPagesHost(repository, *, branch="main", token=None, ...)`**: the repository as
+  `owner/name`. Its `repr` shows the repository and the branch only. The HTTP client a call builds
+  ignores proxy and certificate environment variables; pass `client=` (an `httpx.Client`) for
+  those.
+- **`publish(signed, *, host, title, name=None, notebook=None, role="notebook", revises=None)`**
+  writes what `sign` printed (or its path) to `records/<name>.signed.json` and appends its entry to
+  `host.json`: `{name, signed, attestations: [], title, extensions: {role}}`. `host.json` is
+  rewritten with two-space indentation; no other field of it changes.
+- **`publish_attestation(node, *, host, name)`** writes what `withdraw` or `attest` printed (or
+  its path) to `records/<name>.<kind>-<eight hex of its nodeId>.json` and adds that path to the
+  record's `attestations`, in one commit. A node already listed there is not written again.
+
+### Names
+
+The **default name**, with `notebook=`, is `<stem>/<date>-<eight hex>`: the notebook file's stem,
+the date of the record's `createdAt` (UTC), and the first eight hex characters of its
+`envelopeHash`, for example `dog-licensing/2026-10-04-ebb38315`. The signed document does not carry
+the notebook's file name, so the stem comes from the argument. A rerun signs to another
+`envelopeHash`, so it gets a new name.
+
+A record whose `envelopeHash` the host already lists is not written again, under any name: the
+call writes nothing (`written: False`), and its receipt names the entry that lists it, with that
+entry's `bundle_url` and `verify_url`. host-core's build refuses one `envelopeHash` listed twice,
+so a second entry would stop every later deploy. To find a listed hash, each call makes one read of
+each listed record's signed file.
+
+With an explicit `name=`, a name listed with another record is refused, unless `revises=` is
+given. Then the
+record is written under `<name>-<its first eight hex>`, and the `revises=` node goes on the listed
+record's entry, in the same commit. Sign the node first:
+
+```python
+node = ts.attest(
+    {
+        "type": "attestation/revises/v1",
+        "targetNodeId": prior["envelopeHash"],  # the listed record
+        "successorNodeId": signed["envelopeHash"],  # this one
+        "signer": signed["package"]["signer"],
+    }
+)
+ts.publish(signed, host=host, name="dog-licensing", title="Dog licensing, rerun", revises=node)
+```
+
+`publish` compares the node's fields only: its type, its `successorNodeId` with this record's
+`envelopeHash`, and its `targetNodeId` with the listed record's. Under the default name, a
+`revises=` node goes on the entry of the listed record it targets.
+
+A name is `/`-separated segments of letters, digits, `.`, `_` and `-`, with no `.` or `..`
+segment (host-core's rule), and no `records` or `evidence` segment, which the verifier reads as a
+record page's URL rather than a bundle's.
+
+### Refusals
+
+Each raises `typedstandards.PublishRefusedError` before any write request:
+
+- a token that does not start `github_pat_`, or that holds whitespace, a quote or `op://` (the
+  message names where the token came from, never its value);
+- a name that fails the rule above, or a bundle URL with a `records` or `evidence` segment;
+- an empty title;
+- a record whose `output` is a BlobRef (signed with `output_url=`): the host serves the signed
+  file only, so sign with `output_file=` alone;
+- a record or node whose signer is not the `signer` in the host's `host-policy.json`, or whose
+  type the policy does not name;
+- a role that no rule for `active` records in `host-policy.json` admits: such a record would fail
+  the host's build, and with it every later deploy;
+- a listed name with another record and no `revises=`, or a `revises=` whose fields do not match;
+- anything host-core's build would refuse once the commit lands: a signed file it cannot read as
+  UTF-8 JSON; a signature without its `signature` and `publicKey`, or with a `kid` other than the
+  signer; an empty `createdAt`; under a registry, a signer, display name or key other than the
+  host's first record's; with `registry: null`, a signer that is not a pseudonymous `did:key`; a
+  path another entry already names; a `host.json` that fails host-core's manifest rule; and a host
+  whose build already fails on a listed record;
+- for `publish_attestation`, a withdrawal or supersession that would leave the record in a status
+  no rule of `host-policy.json` displays (the template's policy has no rule for `superseded`); and
+  a claim-to-claim node (`corroborates`, `contradicts`), a name the
+  host does not list, or a node whose `targetNodeId` is not that record's `envelopeHash`.
+
+A ref update GitHub does not accept re-reads the branch head first, since a write that errored may
+have landed. If the commit did not land and the branch moved, `publish` plans again from the new
+head once; a second failure raises `typedstandards.PublishError`, as does an API error, whose
+message names the request and GitHub's own message.
+
+### The receipt
+
+| Key | Value |
+|---|---|
+| `name` | the name the record is listed under (the derived name for a revision) |
+| `commit` | the new commit's id, or `None` when nothing was written |
+| `bundle_url` | `<origin>/bundles/<name>.bundle.json`, from `host.json`'s `origin` |
+| `verify_url` | the verifier's link for `bundle_url`, the same link `badge_cell` writes |
+| `registry_url` | `<origin>/.well-known/typed-publisher.json`, or `None` for a host with no registry |
+| `written` | `True` for a new commit, `False` when the host already listed it |
+| `run` | `None`: `publish` does not wait for the deploy |
+
+### The token
+
+A fine-grained personal access token, for the one publishing repository, with **Contents: read
+and write** and nothing else (enough for a public repository; a private one is unmeasured). Give
+it an expiry. It comes from `token=`, else from `TYPEDSTANDARDS_GITHUB_TOKEN`, read when a publish
+runs; it is sent only as the `Authorization` header of the client the call builds and closes, and
+it is in no message, log record, receipt or file. Never write it as a literal in a cell. Locally,
+set it with the seed, from the secret store that starts the kernel (`op run --env-file=… --
+jupyter lab`); in a hosted notebook, from the hosting service's secret store, as for the seed
+below.
+
+Commits made through the API are unsigned, so a branch rule that requires signed commits or pull
+requests refuses them. The template's README gives the ruleset for a publishing branch: no
+deletion and no force push.
+
+### The seed in a hosted notebook
+
+A hosted kernel has no launcher to set the seed's variable, so the author's own code sets it, in
+one cell that prints nothing:
+
+```python
+import os
+
+os.environ["TYPEDSTANDARDS_SIGNING_SEED_B64"] = read_secret("TYPEDSTANDARDS_SIGNING_SEED_B64")
+```
+
+where `read_secret` stands for the hosting service's own call that reads a stored secret. The
+wrapper still never reads the variable; the CLI does.
+
+The seed must never be pasted into a cell, printed (by `print`, `%env`, or a cell whose last
+expression is the value), or saved in the `.ipynb` in any other way: the notebook is the file that
+is signed and published. In a hosted notebook, the hosting service's runtime holds the seed for as
+long as the kernel runs. Make the seed once, outside any notebook (`openssl rand -base64 32`), and
+keep it in a password manager as well as the service's secret store: a record signed by a key that
+is lost can never be withdrawn or revised.
+
+In GitHub Codespaces, a Codespaces secret named `TYPEDSTANDARDS_SIGNING_SEED_B64` arrives in the
+codespace as an environment variable, so no line is needed; neither a repository Actions variable
+nor an Actions secret is a place for the seed.
 
 ## Versions
 

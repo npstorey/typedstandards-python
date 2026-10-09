@@ -1,0 +1,20 @@
+{
+  "$comment": "The host manifest. typedstandards-host build writes docs/ from it; every path is relative to this file. A copy of the template changes origin to the URL its Pages site is served at, and replaces the record.",
+  "origin": "https://host-template.typedstandards.org",
+  "visibility": "public",
+  "registry": {
+    "$comment": "This template's own statement about the signing key of its example record, served at https://host-template.typedstandards.org/.well-known/typed-publisher.json. The key is a pseudonymous did:key, generated for one signature and deleted after it. This registry is not a Typed Standards record, and not an endorsement by the Typed Standards specification or by typedstandards.org, although this host is a subdomain of it. activatedAt is the earliest createdAt among the records this host serves, as the signer states it."
+  },
+  "index": {
+    "$comment": "The records this template serves: one example record."
+  },
+  "records": [
+    {
+      "name": "first-note",
+      "signed": "records/first-note.signed.json",
+      "attestations": [],
+      "title": "A first signed note",
+      "extensions": { "role": "note" }
+    }
+  ]
+}

@@ -69,3 +69,75 @@ def test_the_helpers_need_no_node(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     ):
         with pytest.raises(typedstandards.NodeLocatorError, match="20.19"):
             call()
+
+
+# --- publishing (typedstandards#141 P2, acceptance 5) ---------------------------------------------
+
+CUSTODY = "In a hosted notebook, the hosting service's runtime holds the seed for as long as the kernel runs."
+
+
+def _publishing_section() -> str:
+    text = README.read_text(encoding="utf-8")
+    start = text.index("## Publishing to a GitHub Pages host")
+    return text[start : text.index("\n## ", start + 1)]
+
+
+def test_readme_states_the_seeds_custody_in_a_hosted_notebook() -> None:
+    assert CUSTODY in " ".join(_publishing_section().split())
+
+
+def test_readme_sets_the_seed_from_a_secret_store_in_one_line() -> None:
+    section = _publishing_section()
+    lines = [line for line in section.splitlines() if 'os.environ["TYPEDSTANDARDS_SIGNING_SEED_B64"] = ' in line]
+    assert len(lines) == 1, lines
+
+
+def test_readme_names_the_unsafe_forms_and_codespaces() -> None:
+    section = " ".join(_publishing_section().split())
+    for phrase in ("pasted into a cell", "printed", "saved in the `.ipynb`", "Codespaces secret", "Actions secret"):
+        assert phrase in section, phrase
+
+
+def test_readme_documents_the_calls_receipt_and_token() -> None:
+    section = " ".join(_publishing_section().split())
+    for phrase in (
+        "ts.GitHubPagesHost(",
+        "ts.publish(",
+        "ts.publish_attestation(",
+        "TYPEDSTANDARDS_GITHUB_TOKEN",
+        "github_pat_",
+        "Contents",
+        "revises=",
+    ):
+        assert phrase in section, phrase
+    for key in ("name", "commit", "bundle_url", "verify_url", "registry_url", "written", "run"):
+        assert f"`{key}`" in section, key
+    # The seat's note on G0-4: the default name leads; the derived name is the explicit-name case.
+    assert section.index("The **default name**") < section.index("`<name>-<its first eight hex>`")
+
+
+def test_the_seed_scanner_reads_python_modules_only(tmp_path: Path) -> None:
+    """The README's seed line is documentation for the author, not package code: the guard's seed
+    scanner covers the package's ``.py`` modules, so it neither sees nor needs to allow it."""
+    from guards import seed_references
+
+    (tmp_path / "README.md").write_text('os.environ["TYPEDSTANDARDS_SIGNING_SEED_B64"] = secret\n', encoding="utf-8")
+    assert seed_references(tmp_path) == []
+    (tmp_path / "module.py").write_text("# TYPEDSTANDARDS_SIGNING_SEED_B64\n", encoding="utf-8")
+    assert seed_references(tmp_path) == ["module.py:1: names TYPEDSTANDARDS_SIGNING_SEED_B64"]
+
+
+def test_readme_shows_how_to_read_the_did_key_before_the_first_publish() -> None:
+    """The template's setup sets host-policy.json's signer to the author's did:key, which the CLI
+    prints only in what it signs: the README shows reading it from a signed record."""
+    section = " ".join(_publishing_section().split())
+    assert 'signed["package"]["signer"]["identifier"]' in section
+    assert "typedstandards-host-template#publishing-from-a-notebook" in section
+
+
+def test_readme_states_that_a_listed_hash_is_written_once() -> None:
+    """D8 A: a hash any listed entry carries is not written again, under any name."""
+    section = " ".join(_publishing_section().split())
+    assert "becomes two entries" not in section
+    assert "under any name" in section
+    assert "one read of each listed record's signed file" in section

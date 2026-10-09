@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- `publish(signed, *, host, title, name=None, notebook=None, role="notebook", revises=None)` and
+  `publish_attestation(node, *, host, name)`: write a signed record, or a withdrawal or other
+  lifecycle attestation on one, to a GitHub Pages host made from the host template's publish mode,
+  as one commit through the Git Data API (typedstandards#141). `GitHubPagesHost(repository, *,
+  branch="main", token=None, ...)` names the repository; the token is `token=`, else
+  `TYPEDSTANDARDS_GITHUB_TOKEN`, a fine-grained token. The default name is the notebook's stem,
+  the record's date and the first eight hex of its `envelopeHash`. A record whose `envelopeHash`
+  any listed entry carries is not written again, under any name, and the receipt names that entry;
+  a listed name with another record needs `revises=`. What host-core's build would refuse is
+  refused before any write. Refusals raise
+  `PublishRefusedError` before any write; an API error, or a second non-fast-forward, raises
+  `PublishError`. The receipt is `{name, commit, bundle_url, verify_url, registry_url, written,
+  run}`, with `run` `None`.
+- README: publishing, the token, and the seed in a hosted notebook and in GitHub Codespaces.
+
 ## 0.1.1 — 2026-10-05
 
 - Fixed: every mapping input to `sign`, `withdraw`, `attest` and `verify` reaches the CLI as a

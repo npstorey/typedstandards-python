@@ -1,0 +1,23 @@
+{
+  "$comment": "The display policy: which records a page shows, and as what. It is this host's own rule, not signed and not verified. Every rule names its statuses, so a status no rule names is refused. A copy of the template changes signer to its own did:key.",
+  "signer": "did:key:z6Mks7BK2kyVhoPY3ayt6ALKeZY5eCbu64XyQuje9gTUxiUB",
+  "type": "content/analysis/v1",
+  "display": [
+    {
+      "$comment": "An active note is shown as current.",
+      "status": "active",
+      "extensions": {
+        "role": [
+          "note"
+        ]
+      },
+      "as": "current"
+    },
+    {
+      "$comment": "A withdrawn record stays listed, marked withdrawn.",
+      "status": "withdrawn",
+      "as": "withdrawn"
+    }
+  ],
+  "unmatched": "refuse"
+}
