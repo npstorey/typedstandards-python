@@ -247,11 +247,16 @@ The **default name**, with `notebook=`, is `<stem>/<date>-<eight hex>`: the note
 the date of the record's `createdAt` (UTC), and the first eight hex characters of its
 `envelopeHash`, for example `dog-licensing/2026-10-04-ebb38315`. The signed document does not carry
 the notebook's file name, so the stem comes from the argument. A rerun signs to another
-`envelopeHash`, so it gets a new name, and publishing the same signed document again finds it
-listed under its name and writes nothing (`written: False`).
+`envelopeHash`, so it gets a new name.
 
-With an explicit `name=`, a name the host already lists with the same `envelopeHash` writes
-nothing, and a name listed with another record is refused, unless `revises=` is given. Then the
+A record whose `envelopeHash` the host already lists is not written again, under any name: the
+call writes nothing (`written: False`), and its receipt names the entry that lists it, with that
+entry's `bundle_url` and `verify_url`. host-core's build refuses one `envelopeHash` listed twice,
+so a second entry would stop every later deploy. To find a listed hash, each call makes one read of
+each listed record's signed file.
+
+With an explicit `name=`, a name listed with another record is refused, unless `revises=` is
+given. Then the
 record is written under `<name>-<its first eight hex>`, and the `revises=` node goes on the listed
 record's entry, in the same commit. Sign the node first:
 
@@ -269,8 +274,7 @@ ts.publish(signed, host=host, name="dog-licensing", title="Dog licensing, rerun"
 
 `publish` compares the node's fields only: its type, its `successorNodeId` with this record's
 `envelopeHash`, and its `targetNodeId` with the listed record's. Under the default name, a
-`revises=` node goes on the entry of the listed record it targets. Whether a record is listed is
-read by name: the same signed document under two explicit names becomes two entries.
+`revises=` node goes on the entry of the listed record it targets.
 
 A name is `/`-separated segments of letters, digits, `.`, `_` and `-`, with no `.` or `..`
 segment (host-core's rule), and no `records` or `evidence` segment, which the verifier reads as a
@@ -291,7 +295,15 @@ Each raises `typedstandards.PublishRefusedError` before any write request:
 - a role that no rule for `active` records in `host-policy.json` admits: such a record would fail
   the host's build, and with it every later deploy;
 - a listed name with another record and no `revises=`, or a `revises=` whose fields do not match;
-- for `publish_attestation`, a claim-to-claim node (`corroborates`, `contradicts`), a name the
+- anything host-core's build would refuse once the commit lands: a signed file it cannot read as
+  UTF-8 JSON; a signature without its `signature` and `publicKey`, or with a `kid` other than the
+  signer; an empty `createdAt`; under a registry, a signer, display name or key other than the
+  host's first record's; with `registry: null`, a signer that is not a pseudonymous `did:key`; a
+  path another entry already names; a `host.json` that fails host-core's manifest rule; and a host
+  whose build already fails on a listed record;
+- for `publish_attestation`, a withdrawal or supersession that would leave the record in a status
+  no rule of `host-policy.json` displays (the template's policy has no rule for `superseded`); and
+  a claim-to-claim node (`corroborates`, `contradicts`), a name the
   host does not list, or a node whose `targetNodeId` is not that record's `envelopeHash`.
 
 A ref update GitHub does not accept re-reads the branch head first, since a write that errored may

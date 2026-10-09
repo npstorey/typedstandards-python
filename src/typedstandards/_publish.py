@@ -285,6 +285,24 @@ def _object_id(value: Any, what: str) -> str:
     return value
 
 
+# --- JSON as host-core reads it ----------------------------------------------------------------
+
+
+def _no_constant(name: str) -> NoReturn:
+    raise ValueError(f"{name} is not JSON")
+
+
+def _parse_host_json(content: bytes) -> Any:
+    """Parse bytes as host-core's ``parseJsonFile`` does (``json.ts:31-41``): strict UTF-8, with a
+    leading byte-order mark dropped as ``TextDecoder`` drops it, and ``JSON.parse``, which has no
+    ``NaN`` or ``Infinity``. Raises ``ValueError`` where host-core throws."""
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError("is not UTF-8") from error
+    return json.loads(text.removeprefix("\ufeff"), parse_constant=_no_constant)
+
+
 # --- the host's files, read at the head ----------------------------------------------------------
 
 
@@ -308,7 +326,7 @@ class _State:
         if path not in self.signed_cache:
             content = self.api.read(path, self.head)
             try:
-                value = json.loads(content) if content is not None else None
+                value = _parse_host_json(content) if content is not None else None
             except ValueError:
                 value = None
             self.signed_cache[path] = value if isinstance(value, dict) else None
@@ -337,7 +355,7 @@ def _read_json_file(api: _Api, path: str, head: str) -> dict[str, Any]:
     if content is None:
         _refuse(f"{path} is not on {api.host.branch}: publish writes to a host made from the host template")
     try:
-        value = json.loads(content)
+        value = _parse_host_json(content)
     except ValueError:
         _refuse(f"{path} on {api.host.branch} is not JSON")
     if not isinstance(value, dict):
@@ -390,6 +408,167 @@ def _check_admitted(policy: Mapping[str, Any], *, signer: str, type_: str, role:
     _refuse(f"no active rule of host-policy.json admits the role {role} (roles active rules admit: {known})")
 
 
+def _displayed(policy: Mapping[str, Any], *, status: str, signer: str, type_: str, extensions: Mapping) -> bool:
+    """Whether host-core's ``displayOf`` (``display.ts:118-145``) shows a record with this status,
+    signer, type and index ``extensions`` under the policy, as the template's display step runs it."""
+    for key, value in (("signer", signer), ("type", type_)):
+        named = _strings(policy.get(key))
+        if named is not None and value not in named:
+            return False
+    for rule in policy.get("display") or []:
+        if not isinstance(rule, dict) or status not in (_strings(rule.get("status")) or []):
+            continue
+        if any(
+            (named := _strings(rule.get(k))) is not None and v not in named
+            for k, v in (("signer", signer), ("type", type_))
+        ):
+            continue
+        admitted = rule.get("extensions") or {}
+        if isinstance(admitted, dict) and all(
+            k in extensions and isinstance(values, list) and extensions[k] in values for k, values in admitted.items()
+        ):
+            return True
+    return False
+
+
+#: The status a lifecycle node moves its record to, as verify-core reads the latest node
+#: (``lifecycle.ts:192-198``); a ``revises`` node moves none.
+_STATUS_AFTER = {
+    "attestation/withdraws/v1": "withdrawn",
+    "attestation/supersedes/v1": "superseded",
+    "attestation/reinstates/v1": "active",
+}
+
+_MANIFEST_ORIGIN = re.compile(r"^https://[^/?#\s]+(/[^?#\s]*[^/?#\s])?$")
+_WINDOWS_PATH = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def _relative(path: Any) -> bool:
+    return isinstance(path, str) and path != "" and not path.startswith("/") and not _WINDOWS_PATH.match(path)
+
+
+def _manifest_problem(m: Any) -> str | None:
+    """host-core's ``parseManifest`` (``manifest.ts:41-95``): why it would refuse ``m``, or ``None``."""
+    if not isinstance(m, dict):
+        return "host.json must be a JSON object"
+    extra = sorted(set(m) - {"$comment", "origin", "visibility", "registry", "index", "records"})
+    missing = sorted({"origin", "registry", "index", "records"} - set(m))
+    if extra or missing:
+        return f"host.json: {', '.join(extra)} not defined" if extra else f"host.json is missing {', '.join(missing)}"
+    if not isinstance(m["origin"], str) or not _MANIFEST_ORIGIN.match(m["origin"]):
+        return "host.json: origin must be an https:// origin with no trailing /, query or fragment"
+    if not isinstance(m.get("visibility"), str) or not m["visibility"]:
+        return "host.json: visibility is required"
+    for key in ("registry", "index"):
+        value = m[key]
+        if key == "registry" and value is None:
+            continue
+        if not isinstance(value, dict) or set(value) - {"$comment"}:
+            return f"host.json: {key} must be an object holding at most $comment" + (
+                " or null" if key == "registry" else ""
+            )
+        if "$comment" in value and not isinstance(value["$comment"], str):
+            return f"host.json: {key}.$comment must be a string"
+    records = m["records"]
+    if not isinstance(records, list) or not records:
+        return "host.json: records must be a non-empty array"
+    seen: set[str] = set()
+    for i, r in enumerate(records):
+        at = f"host.json: records[{i}]"
+        if not isinstance(r, dict):
+            return f"{at} must be an object"
+        extra = sorted(set(r) - {"$comment", "name", "signed", "attestations", "title", "extensions"})
+        missing = sorted({"name", "signed", "attestations", "title"} - set(r))
+        if extra or missing:
+            return f"{at}: {', '.join(extra)} not defined" if extra else f"{at} is missing {', '.join(missing)}"
+        name = r["name"]
+        if not isinstance(name, str) or not all(
+            _NAME_SEGMENT.match(x) and x not in {".", ".."} for x in name.split("/")
+        ):
+            return f"{at}.name fails the record-name rule"
+        if name in seen:
+            return f"{at}.name: {name} is listed twice"
+        seen.add(name)
+        if not _relative(r["signed"]):
+            return f"{at}.signed must be a path relative to host.json"
+        if not isinstance(r["attestations"], list) or not all(_relative(a) for a in r["attestations"]):
+            return f"{at}.attestations must be an array of paths relative to host.json"
+        if not isinstance(r["title"], str) or not r["title"]:
+            return f"{at}.title must be a non-empty string"
+        if "extensions" in r and not isinstance(r["extensions"], dict):
+            return f"{at}.extensions must be an object"
+    return None
+
+
+def _check_manifest(manifest: Any) -> None:
+    if (problem := _manifest_problem(manifest)) is not None:
+        _refuse(f"the host.json publish would write fails host-core's manifest rule: {problem}")
+
+
+def _check_listed(state: _State) -> None:
+    """Read every listed record's signed file (once: ``signed_cache``) and refuse when host-core's
+    build already fails on one: unreadable, not what sign prints, or, under a registry, a signer,
+    display name or key unlike the first record's (``build.ts:49-66``, ``:93-97``)."""
+    first: dict[str, Any] | None = None
+    for entry in state.manifest["records"]:
+        document = state.signed_of(entry)
+        label = entry.get("name")
+        if document is None:
+            _refuse(f"the host's build already fails on {label}: its signed file cannot be read as JSON")
+        if (problem := _signed_problem(document)) is not None:
+            _refuse(f"the host's build already fails on {label}: {problem}")
+        if state.manifest.get("registry") is not None:
+            if first is None:
+                first = document
+            elif (problem := _one_signer_problem(document, first)) is not None:
+                _refuse(f"the host's build already fails on {label}: {problem}")
+
+
+def _one_signer_problem(document: Mapping[str, Any], first: Mapping[str, Any]) -> str | None:
+    """host-core's registry rule (``build.ts:90-98``): one signer identifier, binding tier, display
+    name and key for every record under a registry, and a signature ``kid`` that is the signer."""
+    a, b = _signer_of(document), _signer_of(first)
+    if any(a.get(k) != b.get(k) for k in ("identifier", "bindingTier", "displayName")) or (
+        document["signature"].get("publicKey") != first["signature"].get("publicKey")
+    ):
+        return (
+            f"its signer ({a.get('identifier')}, {a.get('bindingTier')}, {a.get('displayName')!r}) or key differs from "
+            f"the first record's ({b.get('identifier')}, {b.get('bindingTier')}, {b.get('displayName')!r}); a host "
+            "under a registry serves one signer"
+        )
+    kid = document["signature"].get("kid")
+    if kid is not None and kid != a.get("identifier"):
+        return f"its signature's kid {kid} is not the signer's identifier {a.get('identifier')}"
+    return None
+
+
+def _check_registry_rules(state: _State, document: Mapping[str, Any]) -> None:
+    """The rules host-core's build applies to a new record by the host's registry: under one, the
+    first listed record's signer and key (or, for a host's first record, the record's own kid);
+    with ``registry: null``, produce-core's view takes only a self-certifying signer, a
+    pseudonymous ``did:key`` (``build.ts:147-148``, ``commitment.ts:200-215``)."""
+    signer = _signer_of(document)
+    if state.manifest.get("registry") is None:
+        if signer.get("bindingTier") != "pseudonymous" or not str(signer.get("identifier", "")).startswith("did:key:"):
+            _refuse(
+                "host.json's registry is null, under which host-core builds a view only for a pseudonymous did:key "
+                f"signer; this record's is {signer.get('identifier')} at {signer.get('bindingTier')}"
+            )
+        return
+    records = state.manifest["records"]
+    first = state.signed_of(records[0]) if records else None
+    if (problem := _one_signer_problem(document, first if first is not None else document)) is not None:
+        _refuse(f"the record: {problem}")
+
+
+def _check_path_unnamed(manifest: Mapping[str, Any], path: str) -> None:
+    """A file another entry lists is not overwritten: the build would read this record's bytes
+    under that entry (``build.ts:65-66``, ``:70-71``)."""
+    for entry in manifest["records"]:
+        if entry.get("signed") == path or path in (entry.get("attestations") or []):
+            _refuse(f"host.json's entry {entry.get('name')} already names {path}: publish does not overwrite it")
+
+
 # --- the call's own checks, before any request --------------------------------------------------
 
 
@@ -400,26 +579,65 @@ def _load(value: Mapping[str, Any] | str | os.PathLike[str], what: str) -> tuple
     if isinstance(value, (str, os.PathLike)):
         content = Path(value).read_bytes()
         try:
-            return json.loads(content), content
-        except ValueError:
-            _refuse(f"{os.fspath(value)} is not JSON: {what}")
+            return _parse_host_json(content), content
+        except ValueError as error:
+            _refuse(f"{os.fspath(value)} {error}, as host-core reads a file (UTF-8, JSON.parse): {what}")
     return value, None
 
 
 def _serialize(value: Any) -> bytes:
-    return (json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
+    """JSON with two-space indentation and a newline. A value JSON.parse would refuse (NaN,
+    Infinity) is refused."""
+    try:
+        return (json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
+    except ValueError as error:
+        _refuse(f"a document holds a value JSON cannot carry ({error}): host-core could not read it")
+
+
+def _signature_problem(value: Any) -> str | None:
+    """host-core's ``checkSignature`` (``records.ts:43-50``)."""
+    if not isinstance(value, Mapping) or not isinstance(value.get("signature"), str):
+        return "its signature must be an object with a signature and a publicKey string"
+    if not isinstance(value.get("publicKey"), str):
+        return "its signature must be an object with a signature and a publicKey string"
+    for key in ("algorithm", "kid"):
+        if key in value and not isinstance(value[key], str):
+            return f"its signature's {key} must be a string"
+    return None
+
+
+def _signed_problem(value: Any) -> str | None:
+    """Why host-core's build would refuse a signed file: ``checkSignedDocument``
+    (``records.ts:54-66``), then the package's ``metadata.createdAt`` and ``signer.identifier``
+    (``build.ts:61-64``). ``None`` when it would not."""
+    if not isinstance(value, Mapping) or set(value) != {"package", "envelopeHash", "signature"}:
+        return "it is not what sign prints: {package, envelopeHash, signature}"
+    if not isinstance(value["package"], Mapping):
+        return "its package is not an object"
+    if not isinstance(value["envelopeHash"], str) or not _HEX_64.match(value["envelopeHash"]):
+        return "its envelopeHash is not 64 lowercase hex characters"
+    if (problem := _signature_problem(value["signature"])) is not None:
+        return problem
+    metadata = value["package"].get("metadata")
+    created_at = metadata.get("createdAt") if isinstance(metadata, Mapping) else None
+    if not isinstance(created_at, str) or not created_at:
+        return "its package has no metadata.createdAt, which the index states"
+    if not _signer_of(value).get("identifier"):
+        return "its package has no signer.identifier, which the index states"
+    return None
+
+
+def _signer_of(document: Mapping[str, Any]) -> dict[str, Any]:
+    signer = document["package"].get("signer") if isinstance(document.get("package"), Mapping) else None
+    return dict(signer) if isinstance(signer, Mapping) else {}
 
 
 def _check_signed(value: Any) -> tuple[str, str, str, str]:
     """``(envelopeHash, signer identifier, type, createdAt)`` from what ``sign`` printed."""
-    if not isinstance(value, Mapping) or set(value) != {"package", "envelopeHash", "signature"}:
-        _refuse("publish takes what sign prints: {package, envelopeHash, signature}")
+    if (problem := _signed_problem(value)) is not None:
+        _refuse(f"publish takes what sign prints, as host-core's build reads it: {problem}")
     package = value["package"]
     envelope_hash = value["envelopeHash"]
-    if not isinstance(envelope_hash, str) or not _HEX_64.match(envelope_hash):
-        _refuse("the record's envelopeHash is not 64 lowercase hex characters")
-    if not isinstance(package, Mapping):
-        _refuse("the record's package is not an object")
     output = package.get("output")
     if isinstance(output, Mapping):
         _refuse(
@@ -454,6 +672,8 @@ def _check_node(value: Any, what: str) -> tuple[str, str, str, dict[str, Any]]:
     signer = node.get("signer", {}).get("identifier") if isinstance(node.get("signer"), Mapping) else None
     if not isinstance(signer, str):
         _refuse(f"{what}: node names no signer.identifier")
+    if (problem := _signature_problem(value["signature"])) is not None:
+        _refuse(f"{what}: {problem}")
     return node_id, type_, signer, dict(node)
 
 
@@ -600,8 +820,9 @@ def publish(
     ``createdAt`` and the first eight hex of its ``envelopeHash``. Its file is written at
     ``records/<name>.signed.json``, its entry gets ``title`` and ``extensions.role``.
 
-    A record the host already lists under that name with the same ``envelopeHash`` is not written
-    again (``written: False``). A name listed with another record is refused, unless ``revises=``
+    A record whose ``envelopeHash`` any listed entry carries is not written again, under any name
+    (``written: False``); the receipt names that entry. To find it, each call reads every listed
+    record's signed file once. A name listed with another record is refused, unless ``revises=``
     is what :func:`attest` printed for an ``attestation/revises/v1`` from the listed record to this
     one: then the record is written under ``<name>-<its first eight hex>``, and the node on the
     listed record's entry, in the same commit. Under a name that is not listed, ``revises=`` goes
@@ -609,8 +830,9 @@ def publish(
 
     Refused before any write: a token that is not a fine-grained one, a name that fails
     host-core's rule or has a ``records`` or ``evidence`` segment, an empty title, a BlobRef
-    output, a signer other than ``host-policy.json``'s, a role no active rule admits, and a
-    ``revises=`` whose type, ``successorNodeId`` or ``targetNodeId`` does not match.
+    output, a signer other than ``host-policy.json``'s, a role no active rule admits, a
+    ``revises=`` whose type, ``successorNodeId`` or ``targetNodeId`` does not match, and what
+    host-core's build would refuse once the commit lands.
 
     Returns ``{name, commit, bundle_url, verify_url, registry_url, written, run}``; ``run`` is
     ``None``: the host's workflow deploys the commit, and publish does not wait for it.
@@ -643,17 +865,21 @@ def publish(
 
     def plan_for(state: _State) -> _Plan | dict[str, Any]:
         _bundle_url(state.manifest["origin"], name)
+        # Every listed record's signed file, read once: host-core lists a hash once (build.ts:65-66).
+        _check_listed(state)
+        carried = next((e for e in state.manifest["records"] if state.hash_of(e) == envelope_hash), None)
+        if carried is not None:
+            return _receipt(state, carried["name"], None)
         _check_signer(state.policy, signer, "the record")
         if node is not None:
             _check_signer(state.policy, node_signer, "revises=")
         _check_admitted(state.policy, signer=signer, type_=type_, role=role)
+        _check_registry_rules(state, document)
         record_name = name
         target: dict[str, Any] | None = None
         listed = state.entry(name)
         if listed is not None:
             listed_hash = state.hash_of(listed)
-            if listed_hash == envelope_hash:
-                return _receipt(state, name, None)
             if node is None:
                 _refuse(
                     f"{name} is listed with another record (envelopeHash {listed_hash or 'unread'}): pass "
@@ -663,10 +889,7 @@ def publish(
                 _refuse(f"revises= targets {node.get('targetNodeId')}, not the record listed as {name}")
             target = listed
             record_name = check_name(f"{name}-{envelope_hash[:8]}")
-            again = state.entry(record_name)
-            if again is not None:
-                if state.hash_of(again) == envelope_hash:
-                    return _receipt(state, record_name, None)
+            if state.entry(record_name) is not None:
                 _refuse(f"{record_name}, the name a revision of {name} takes, is listed with another record")
             _bundle_url(state.manifest["origin"], record_name)
         elif node is not None:
@@ -678,6 +901,7 @@ def publish(
                 _refuse(f"revises= targets {node.get('targetNodeId')}, and no record this host lists has that hash")
         manifest = copy.deepcopy(state.manifest)
         signed_path = f"{_INPUT_DIRECTORY}/{record_name}.signed.json"
+        _check_path_unnamed(manifest, signed_path)
         files = {signed_path: content}
         manifest["records"].append(
             {
@@ -691,11 +915,13 @@ def publish(
         message = f"Publish {record_name}"
         if target is not None and node is not None and node_bytes is not None:
             node_path = _node_path(target["name"], _REVISES, node_id)
-            files[node_path] = node_bytes
             entry = next(e for e in manifest["records"] if e.get("name") == target["name"])
-            if node_path not in entry.setdefault("attestations", []):
+            if node_path not in entry.setdefault("attestations", []):  # a listed node file stays as it is
+                _check_path_unnamed(manifest, node_path)
                 entry["attestations"].append(node_path)
+                files[node_path] = node_bytes
             message = f"Publish {record_name}, a revision of {target['name']}"
+        _check_manifest(manifest)
         return _Plan(files, manifest, message, record_name)
 
     return _run(host, plan_for)
@@ -710,8 +936,9 @@ def publish_attestation(
 
     Refused before any write: a token that is not a fine-grained one, a claim-to-claim node
     (``corroborates``, ``contradicts``), a name the host does not list, a node aimed at another
-    record (its ``targetNodeId`` is not the listed record's ``envelopeHash``), and a signer other
-    than ``host-policy.json``'s. A node already listed on the entry is not written again
+    record (its ``targetNodeId`` is not the listed record's ``envelopeHash``), a signer other
+    than ``host-policy.json``'s, and a withdrawal or supersession that would leave the record in a
+    status no policy rule displays. A node already listed on the entry is not written again
     (``written: False``). Returns the receipt :func:`publish` returns, for the record.
     """
     document, original = _load(node, "publish_attestation takes what withdraw or attest prints")
@@ -733,15 +960,30 @@ def publish_attestation(
         if path in (listed.get("attestations") or []):
             existing = state.api.read(path, state.head)
             try:
-                same = existing is not None and json.loads(existing).get("nodeId") == node_id
+                same = existing is not None and _parse_host_json(existing).get("nodeId") == node_id
             except (ValueError, AttributeError):
                 same = False
             if same:
                 return _receipt(state, name, None)
             _refuse(f"{path} is listed on {name} with another node")
+        status = _STATUS_AFTER.get(type_)
+        record = state.signed_of(listed) or {}
+        if status is not None and not _displayed(
+            state.policy,
+            status=status,
+            signer=str(_signer_of(record).get("identifier", "")) if record else "",
+            type_=str((record.get("package") or {}).get("type") or "content/analysis/v1"),
+            extensions=listed.get("extensions") or {},
+        ):
+            _refuse(
+                f"no rule of host-policy.json displays {name} once it is {status}: the host's display step would "
+                f"refuse it, and with it every later deploy. Add a rule for {status} records first"
+            )
         manifest = copy.deepcopy(state.manifest)
+        _check_path_unnamed(manifest, path)
         entry = next(e for e in manifest["records"] if e.get("name") == name)
         entry.setdefault("attestations", []).append(path)
+        _check_manifest(manifest)
         return _Plan(
             {path: content}, manifest, f"Add the {type_.split('/')[1]} attestation {node_id[:8]} to {name}", name
         )

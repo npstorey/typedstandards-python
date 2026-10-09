@@ -227,7 +227,7 @@ def test_revises_whose_fields_do_not_match_is_refused(docs: Docs, case: str) -> 
         "another target": docs.revises,
     }[case]
     signed = docs.first if case == "another successor" else docs.second
-    listed = {"dog-licensing": docs.foreign if case == "another target" else docs.first}
+    listed = {"dog-licensing": docs.third if case == "another target" else docs.first}
     gh = github(docs, listed=listed)
     with pytest.raises(ts.PublishRefusedError, match="revises"):
         ts.publish(signed, host=host(gh), name="dog-licensing", title="Rerun", revises=node)
@@ -500,7 +500,7 @@ def test_every_write_is_a_git_data_call(docs: Docs) -> None:
     gh.concurrent_writes = 1
     ts.publish(docs.second, host=host(gh), name="dog-licensing", title="Rerun", revises=docs.revises)
     ts.publish_attestation(docs.withdrawal, host=host(gh), name="dog-licensing")
-    ts.publish(docs.first, host=host(gh), notebook="dog-licensing.ipynb", title="Again")
+    ts.publish(docs.third, host=host(gh), notebook="dog-licensing.ipynb", title="Another")
     assert_git_data_only(gh)
     assert {m for m, _ in gh.requests} == {"GET", "POST", "PATCH"}
     patches = [m for m, _ in gh.requests].count("PATCH")

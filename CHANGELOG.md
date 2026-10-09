@@ -8,8 +8,10 @@
   as one commit through the Git Data API (typedstandards#141). `GitHubPagesHost(repository, *,
   branch="main", token=None, ...)` names the repository; the token is `token=`, else
   `TYPEDSTANDARDS_GITHUB_TOKEN`, a fine-grained token. The default name is the notebook's stem,
-  the record's date and the first eight hex of its `envelopeHash`. A listed hash is not written
-  again; a listed name with another record needs `revises=`. Refusals raise
+  the record's date and the first eight hex of its `envelopeHash`. A record whose `envelopeHash`
+  any listed entry carries is not written again, under any name, and the receipt names that entry;
+  a listed name with another record needs `revises=`. What host-core's build would refuse is
+  refused before any write. Refusals raise
   `PublishRefusedError` before any write; an API error, or a second non-fast-forward, raises
   `PublishError`. The receipt is `{name, commit, bundle_url, verify_url, registry_url, written,
   run}`, with `run` `None`.

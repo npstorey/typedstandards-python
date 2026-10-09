@@ -257,9 +257,9 @@ def test_the_token_comes_from_the_argument_else_the_environment(docs: Docs, monk
     assert ts.publish(docs.first, host=from_env, name="a", title="T")["written"] is True
 
     monkeypatch.setenv(ts.TOKEN_VARIABLE, "github_pat_TESTONLY_the_environments")
-    assert ts.publish(docs.first, host=host(gh), name="b", title="T")["written"] is True  # token= wins
+    assert ts.publish(docs.second, host=host(gh), name="b", title="T")["written"] is True  # token= wins
     with pytest.raises(ts.PublishError, match="401"):
-        ts.publish(docs.first, host=ts.GitHubPagesHost(gh.repository, transport=gh.transport()), name="c", title="T")
+        ts.publish(docs.third, host=ts.GitHubPagesHost(gh.repository, transport=gh.transport()), name="c", title="T")
 
 
 def test_the_environment_is_read_when_publishing(docs: Docs, monkeypatch: pytest.MonkeyPatch) -> None:

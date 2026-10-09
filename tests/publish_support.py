@@ -37,6 +37,7 @@ class Docs:
     note: dict[str, Any]  # the template's example entry, first-note, re-signed by the test key
     renamed: dict[str, Any]  # the test key, another signer.displayName
     supersedes: dict[str, Any]  # attestation/supersedes/v1: target first, successor second
+    third: dict[str, Any]  # another record by the test key
 
 
 def make_docs(directory: Path) -> Docs:
@@ -82,6 +83,7 @@ def make_docs(directory: Path) -> Docs:
             }
         )
         note = ts.sign(analysis_input(output="A first signed note."))
+        third = ts.sign(analysis_input(output="A third record."))
         renamed_signer = {"bindingTier": "pseudonymous", "displayName": "Another display name"}
         renamed = ts.sign(analysis_input(signer=renamed_signer), output_file=notebook)
         mp.setenv(SEED_VARIABLE, fresh_seed_b64())
@@ -98,6 +100,7 @@ def make_docs(directory: Path) -> Docs:
         note,
         renamed,
         supersedes,
+        third,
     )
 
 
