@@ -133,3 +133,11 @@ def test_readme_shows_how_to_read_the_did_key_before_the_first_publish() -> None
     section = " ".join(_publishing_section().split())
     assert 'signed["package"]["signer"]["identifier"]' in section
     assert "typedstandards-host-template#publishing-from-a-notebook" in section
+
+
+def test_readme_states_that_a_listed_hash_is_written_once() -> None:
+    """D8 A: a hash any listed entry carries is not written again, under any name."""
+    section = " ".join(_publishing_section().split())
+    assert "becomes two entries" not in section
+    assert "under any name" in section
+    assert "one read of each listed record's signed file" in section

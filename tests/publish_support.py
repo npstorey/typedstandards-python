@@ -34,6 +34,9 @@ class Docs:
     withdrawal: dict[str, Any]  # attestation/withdraws/v1 of first
     corroboration: dict[str, Any]  # a claim-to-claim node on first
     signer: str
+    note: dict[str, Any]  # the template's example entry, first-note, re-signed by the test key
+    renamed: dict[str, Any]  # the test key, another signer.displayName
+    supersedes: dict[str, Any]  # attestation/supersedes/v1: target first, successor second
 
 
 def make_docs(directory: Path) -> Docs:
@@ -70,9 +73,32 @@ def make_docs(directory: Path) -> Docs:
                 "signer": signer,
             }
         )
+        supersedes = ts.attest(
+            {
+                "type": "attestation/supersedes/v1",
+                "targetNodeId": first["envelopeHash"],
+                "successorNodeId": second["envelopeHash"],
+                "signer": signer,
+            }
+        )
+        note = ts.sign(analysis_input(output="A first signed note."))
+        renamed_signer = {"bindingTier": "pseudonymous", "displayName": "Another display name"}
+        renamed = ts.sign(analysis_input(signer=renamed_signer), output_file=notebook)
         mp.setenv(SEED_VARIABLE, fresh_seed_b64())
         foreign = ts.sign(analysis_input(), output_file=notebook)
-    return Docs(first, second, blobref, foreign, revises, withdrawal, corroboration, signer["identifier"])
+    return Docs(
+        first,
+        second,
+        blobref,
+        foreign,
+        revises,
+        withdrawal,
+        corroboration,
+        signer["identifier"],
+        note,
+        renamed,
+        supersedes,
+    )
 
 
 def template_manifest() -> dict[str, Any]:
@@ -98,7 +124,8 @@ def github(
     files = {
         "host.json": (FIXTURES / "template-host.json").read_bytes(),
         "host-policy.json": dumps(policy if policy is not None else template_policy(docs.signer)),
-        "records/first-note.signed.json": b'{"envelopeHash": "not this test\'s record"}\n',
+        # The template's example entry, its file re-signed by this test's key: a host serves one signer.
+        "records/first-note.signed.json": dumps(docs.note),
     }
     value = manifest if manifest is not None else template_manifest()
     for name, signed in (listed or {}).items():

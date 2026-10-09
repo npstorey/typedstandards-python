@@ -27,15 +27,17 @@ import typedstandards as ts
 WRITE_METHODS = {"POST", "PATCH", "PUT", "DELETE"}
 
 
-def paths(gh: FakeGitHub, head: str) -> list[tuple[str, str]]:
-    """The requests a publish of a new record makes, from the branch head ``head``."""
+def paths(gh: FakeGitHub, head: str, reads: tuple[str, ...] = ("records/first-note.signed.json",)) -> list:
+    """The reads a publish makes from the branch head ``head``: the ref, the commit, host.json,
+    host-policy.json, then each listed record's signed file (``reads``), once each, in the
+    manifest's order. The template's ``first-note`` is listed unless a test says otherwise."""
     r = f"/repos/{gh.repository}"
     return [
         ("GET", f"{r}/git/ref/heads/main"),
         ("GET", f"{r}/git/commits/{head}"),
         ("GET", f"{r}/contents/host.json"),
         ("GET", f"{r}/contents/host-policy.json"),
-    ]
+    ] + [("GET", f"{r}/contents/{path}") for path in reads]
 
 
 def writes(gh: FakeGitHub, blobs: int) -> list[tuple[str, str]]:
@@ -438,9 +440,9 @@ def test_a_withdrawal_is_one_commit_on_its_records_entry(docs: Docs) -> None:
     start = gh.head
     receipt = ts.publish_attestation(docs.withdrawal, host=host(gh), name="dog-licensing")
     r = f"/repos/{gh.repository}"
-    assert gh.requests == paths(gh, start) + [("GET", f"{r}/contents/records/dog-licensing.signed.json")] + writes(
-        gh, blobs=2
-    )
+    assert gh.requests == paths(gh, start, reads=()) + [
+        ("GET", f"{r}/contents/records/dog-licensing.signed.json")
+    ] + writes(gh, blobs=2)
     assert_git_data_only(gh)
     node_path = f"records/dog-licensing.withdraws-{docs.withdrawal['nodeId'][:8]}.json"
     assert json.loads(gh.files_at()[node_path]) == docs.withdrawal
@@ -559,7 +561,7 @@ def test_the_first_publish_to_a_copy_in_its_starting_state(docs: Docs) -> None:
     assert not any(path.startswith("records/") for path in gh.files_at())
     start = gh.head
     receipt = ts.publish(docs.first, host=host(gh), notebook="dog-licensing.ipynb", title="Dog licensing")
-    assert gh.requests == paths(gh, start) + writes(gh, blobs=2)
+    assert gh.requests == paths(gh, start, reads=()) + writes(gh, blobs=2)
     name = receipt["name"]
     assert gh.json_at("host.json")["records"] == [
         {
@@ -573,3 +575,189 @@ def test_the_first_publish_to_a_copy_in_its_starting_state(docs: Docs) -> None:
     assert json.loads(gh.files_at()[f"records/{name}.signed.json"]) == docs.first
     tree_body = next(b for (m, p), b in zip(gh.requests, gh.bodies, strict=True) if p.endswith("/git/trees"))
     assert {item["path"] for item in tree_body["tree"]} == {f"records/{name}.signed.json", "host.json"}
+
+
+# --- a hash any listed entry carries (D8 A; host-core build.ts:65-66 refuses a hash listed twice) ---
+
+
+def _assert_names_the_listed_entry(gh: FakeGitHub, receipt: dict[str, Any], listed: str) -> None:
+    assert_nothing_written(gh)
+    assert receipt["written"] is False and receipt["commit"] is None
+    assert receipt["name"] == listed
+    assert receipt["bundle_url"] == f"{ORIGIN}/bundles/{listed}.bundle.json"
+    from typedstandards._badge import verify_href
+
+    assert receipt["verify_url"] == verify_href(receipt["bundle_url"])
+
+
+def test_a_hash_listed_under_another_name_writes_nothing(docs: Docs) -> None:
+    gh = github(docs, listed={"a": docs.first})
+    receipt = ts.publish(docs.first, host=host(gh), name="b", title="T")
+    _assert_names_the_listed_entry(gh, receipt, "a")
+
+
+def test_a_hash_listed_under_another_default_name_writes_nothing(docs: Docs) -> None:
+    listed = default_name(docs.first, stem="another-stem")
+    gh = github(docs, listed={listed: docs.first})
+    receipt = ts.publish(docs.first, host=host(gh), notebook="dog-licensing.ipynb", title="T")
+    _assert_names_the_listed_entry(gh, receipt, listed)
+
+
+def test_a_revision_whose_hash_is_listed_writes_nothing(docs: Docs) -> None:
+    gh = github(docs, listed={"dog-licensing": docs.first, "rerun": docs.second})
+    receipt = ts.publish(docs.second, host=host(gh), name="dog-licensing", title="T", revises=docs.revises)
+    _assert_names_the_listed_entry(gh, receipt, "rerun")
+
+
+def test_each_listed_file_is_read_once_per_call(docs: Docs) -> None:
+    gh = github(docs, listed={"dog-licensing": docs.first, "rerun": docs.foreign})
+    with pytest.raises(ts.PublishRefusedError):
+        ts.publish(docs.second, host=host(gh), notebook="x.ipynb", title="T", revises=docs.revises)
+    reads = [p for m, p in gh.requests if "/contents/records/" in p]
+    assert len(reads) == len(set(reads)) == 3
+
+
+# --- the other throws host-core's build reaches (typedstandards 116882a) --------------------------
+
+
+def _edited(document: dict[str, Any], edit: Any) -> dict[str, Any]:
+    value = copy.deepcopy(document)
+    edit(value)
+    return value
+
+
+def test_a_signer_unlike_the_listed_records_is_refused(docs: Docs) -> None:
+    """build.ts:93-94: every record under a registry has one signer, display name and key."""
+    gh = github(docs)
+    with pytest.raises(ts.PublishRefusedError, match="one signer"):
+        ts.publish(docs.renamed, host=host(gh), name="renamed", title="T")
+    assert_nothing_written(gh)
+
+
+def test_a_signature_kid_other_than_the_signer_is_refused(docs: Docs) -> None:
+    """build.ts:96-97."""
+    edited = _edited(docs.first, lambda d: d["signature"].update(kid="did:key:z6MkOther"))
+    gh = github(docs)
+    with pytest.raises(ts.PublishRefusedError, match="kid"):
+        ts.publish(edited, host=host(gh), name="dog-licensing", title="T")
+    assert_nothing_written(gh)
+
+
+@pytest.mark.parametrize("field", ["publicKey", "signature"])
+def test_a_signature_host_core_refuses_is_refused(docs: Docs, field: str) -> None:
+    """records.ts:44-48."""
+    edited = _edited(docs.first, lambda d: d["signature"].pop(field))
+    gh = github(docs)
+    with pytest.raises(ts.PublishRefusedError, match="signature"):
+        ts.publish(edited, host=host(gh), name="dog-licensing", title="T")
+    assert gh.requests == []
+
+
+def test_an_empty_created_at_is_refused(docs: Docs) -> None:
+    """build.ts:61-62."""
+    edited = _edited(docs.first, lambda d: d["package"]["metadata"].update(createdAt=""))
+    gh = github(docs)
+    with pytest.raises(ts.PublishRefusedError, match="createdAt"):
+        ts.publish(edited, host=host(gh), name="dog-licensing", title="T")
+    assert gh.requests == []
+
+
+def test_no_registry_refuses_a_signer_that_is_not_self_certifying(docs: Docs) -> None:
+    """build.ts:147-148, produce-core's view: with registry null, only a pseudonymous did:key."""
+    edited = _edited(docs.first, lambda d: d["package"]["signer"].update(bindingTier="verified"))
+    manifest = template_manifest()
+    manifest["registry"] = None
+    gh = github(docs, manifest=manifest)
+    with pytest.raises(ts.PublishRefusedError, match="registry"):
+        ts.publish(edited, host=host(gh), name="dog-licensing", title="T")
+    assert_nothing_written(gh)
+
+
+def test_a_signed_path_another_entry_names_is_refused(docs: Docs) -> None:
+    """Overwriting a file another entry lists would list one hash twice (build.ts:65-66)."""
+    manifest = template_manifest()
+    manifest["records"].append(
+        {"name": "x", "signed": "records/dog-licensing.signed.json", "attestations": [], "title": "x"}
+    )
+    gh = github(docs, manifest=manifest)
+    gh.trees[gh.commits[gh.head]["tree"]]["records/dog-licensing.signed.json"] = dumps(docs.second)
+    with pytest.raises(ts.PublishRefusedError, match="already names"):
+        ts.publish(docs.first, host=host(gh), name="dog-licensing", title="T")
+    assert_nothing_written(gh)
+
+
+def test_an_attestation_path_another_entry_names_is_refused(docs: Docs) -> None:
+    """Overwriting a node file another entry lists would aim it at the wrong record (build.ts:70-71)."""
+    gh = github(docs, listed={"dog-licensing": docs.first})
+    path = f"records/dog-licensing.withdraws-{docs.withdrawal['nodeId'][:8]}.json"
+    manifest = gh.json_at("host.json")
+    manifest["records"][0]["attestations"].append(path)
+    gh.trees[gh.commits[gh.head]["tree"]]["host.json"] = dumps(manifest)
+    with pytest.raises(ts.PublishRefusedError, match="already names"):
+        ts.publish_attestation(docs.withdrawal, host=host(gh), name="dog-licensing")
+    assert_nothing_written(gh)
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda m: m["records"][0].update(note="not a field"),
+        lambda m: m.pop("visibility"),
+        lambda m: m["records"][0].update(title=""),
+        lambda m: m.update(index={"$comment": 1}),
+    ],
+    ids=["a record key host-core does not define", "no visibility", "an empty title", "a $comment not a string"],
+)
+def test_a_host_json_host_core_refuses_is_refused(docs: Docs, edit: Any) -> None:
+    """manifest.ts: the manifest publish writes must pass parseManifest."""
+    manifest = template_manifest()
+    edit(manifest)
+    gh = github(docs, manifest=manifest)
+    with pytest.raises(ts.PublishRefusedError, match="host-core"):
+        ts.publish(docs.first, host=host(gh), name="dog-licensing", title="T")
+    assert_nothing_written(gh)
+
+
+def test_a_listed_record_that_cannot_be_read_is_refused(docs: Docs) -> None:
+    """build.ts:49-50 and records.ts:54-59: the build already fails on it."""
+    manifest = template_manifest()
+    manifest["records"].append({"name": "gone", "signed": "records/gone.signed.json", "attestations": [], "title": "g"})
+    gh = github(docs, manifest=manifest)
+    with pytest.raises(ts.PublishRefusedError, match="gone"):
+        ts.publish(docs.first, host=host(gh), name="dog-licensing", title="T")
+    assert_nothing_written(gh)
+
+
+@pytest.mark.parametrize("encoding", ["NaN", "utf-16"])
+def test_a_signed_file_json_parse_refuses_is_refused(docs: Docs, tmp_path: Path, encoding: str) -> None:
+    """json.ts:31-41: host-core reads strict UTF-8 and JSON.parse, which has no NaN."""
+    path = tmp_path / "signed.json"
+    if encoding == "NaN":
+        edited = _edited(docs.first, lambda d: d["package"].update(extra=float("nan")))
+        path.write_text(json.dumps(edited), encoding="utf-8")
+    else:
+        path.write_text(json.dumps(docs.first), encoding="utf-16")
+    gh = github(docs)
+    with pytest.raises(ts.PublishRefusedError, match="UTF-8|JSON"):
+        ts.publish(path, host=host(gh), name="dog-licensing", title="T")
+    assert gh.requests == []
+
+
+# --- the display step after a lifecycle node (the template's display.mjs; G0-3's reason) ----------
+
+
+def test_a_withdrawal_no_rule_displays_is_refused(docs: Docs) -> None:
+    value = template_policy(docs.signer)
+    value["display"] = [value["display"][0]]  # no rule for withdrawn records
+    gh = github(docs, listed={"dog-licensing": docs.first}, policy=value)
+    with pytest.raises(ts.PublishRefusedError, match="withdrawn"):
+        ts.publish_attestation(docs.withdrawal, host=host(gh), name="dog-licensing")
+    assert_nothing_written(gh)
+
+
+def test_a_supersession_the_template_policy_cannot_display_is_refused(docs: Docs) -> None:
+    """The template's policy names active and withdrawn only: a superseded record would be refused."""
+    gh = github(docs, listed={"dog-licensing": docs.first})
+    with pytest.raises(ts.PublishRefusedError, match="superseded"):
+        ts.publish_attestation(docs.supersedes, host=host(gh), name="dog-licensing")
+    assert_nothing_written(gh)
