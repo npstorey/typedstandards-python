@@ -391,16 +391,22 @@ def test_no_frame_holds_the_token_when_an_exception_escapes_the_client(docs: Doc
 # --- GitHubPagesHost's own errors -----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("argument", ["repository", "branch", "api_url"])
+#: A token-shaped value given as the wrong argument. Module constants, so the calls below hold no
+#: local of their own that a traceback with frame locals would print: only the package's frames
+#: are under test.
+WRONG_ARGUMENT = "github_pat_TESTONLY_given_as_the_wrong_argument"
+MISPLACED = {
+    "repository": lambda: ts.GitHubPagesHost(WRONG_ARGUMENT, token=TOKEN),
+    "branch": lambda: ts.GitHubPagesHost("example-owner/example-host", branch=WRONG_ARGUMENT, token=TOKEN),
+    "api_url": lambda: ts.GitHubPagesHost("example-owner/example-host", api_url=WRONG_ARGUMENT, token=TOKEN),
+}
+
+
+@pytest.mark.parametrize("argument", MISPLACED)
 def test_the_hosts_errors_never_quote_their_argument(argument: str) -> None:
     """A token-shaped value given as the wrong argument stays out of the error's str, repr and
     traceback with locals, and so does the token= given beside it."""
-    value = "github_pat_TESTONLY_given_as_the_wrong_argument"
-    kwargs: dict[str, Any] = {"token": TOKEN}
-    if argument == "repository":
-        texts = captured(lambda: ts.GitHubPagesHost(value, **kwargs))
-    else:
-        texts = captured(lambda: ts.GitHubPagesHost("example-owner/example-host", **{argument: value}, **kwargs))
+    texts = captured(MISPLACED[argument])
     assert any(where == "exception repr" and text.startswith("ValueError(") for where, text in texts), texts
-    assert leaks(value, texts) == []
+    assert leaks(WRONG_ARGUMENT, texts) == []
     assert leaks(TOKEN, texts) == []

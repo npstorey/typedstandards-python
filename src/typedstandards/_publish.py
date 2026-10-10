@@ -18,6 +18,7 @@ and never writes it to a file, a log record, a message or a return value.
 from __future__ import annotations
 
 import copy
+import functools
 import json
 import logging
 import os
@@ -111,14 +112,13 @@ class GitHubPagesHost:
         transport: httpx.BaseTransport | None = None,
         timeout: float = 30.0,
     ) -> None:
-        if not isinstance(repository, str) or not _REPOSITORY.match(repository):
-            raise ValueError(f"repository must be owner/name, as in https://github.com/owner/name: {repository!r}")
-        if not isinstance(branch, str) or not _BRANCH.match(branch) or ".." in branch:
-            raise ValueError(f"branch must be a branch name: {branch!r}")
-        if not isinstance(api_url, str) or not api_url.startswith("https://") or api_url.endswith("/"):
-            raise ValueError("api_url must be an https:// URL with no trailing /")
-        if token is not None and not isinstance(token, str):
-            raise TypeError("token must be a string")
+        problem = _host_argument_problem(repository, branch, api_url, token)
+        if problem is not None:
+            # The error never quotes an argument, and no argument stays a local of this frame,
+            # which a traceback with frame locals would print.
+            del repository, branch, token, api_url, client, transport
+            kind, message = problem
+            raise kind(message)
         self.repository = repository
         self.branch = branch
         self.api_url = api_url
@@ -128,7 +128,7 @@ class GitHubPagesHost:
         self._transport = transport
 
     def __repr__(self) -> str:
-        return f"GitHubPagesHost({self.repository!r}, branch={self.branch!r})"
+        return f"GitHubPagesHost({getattr(self, 'repository', '?')!r}, branch={getattr(self, 'branch', '?')!r})"
 
     __str__ = __repr__
 
@@ -166,6 +166,29 @@ def _token_problem(value: str | None, source: str) -> str | None:
     return None
 
 
+#: The prefixes of GitHub's token formats: a value that starts with one is a token, not a name.
+_TOKEN_PREFIXES = ("github_pat_", "ghp_", "gho_", "ghu_", "ghs_", "ghr_")
+
+
+def _host_argument_problem(repository: Any, branch: Any, api_url: Any, token: Any) -> tuple[type, str] | None:
+    """Why ``GitHubPagesHost`` refuses its arguments, in words that quote none of them."""
+    for label, value in (("repository", repository), ("branch", branch)):
+        if isinstance(value, str) and any(part.startswith(_TOKEN_PREFIXES) for part in value.split("/")):
+            return ValueError, (
+                f"{label} looks like a GitHub token (the value is not shown): pass a token as token=, or set "
+                f"{TOKEN_VARIABLE}"
+            )
+    if not isinstance(repository, str) or not _REPOSITORY.match(repository):
+        return ValueError, "repository must be owner/name, as in https://github.com/owner/name (the value is not shown)"
+    if not isinstance(branch, str) or not _BRANCH.match(branch) or ".." in branch:
+        return ValueError, "branch must be a branch name (the value is not shown)"
+    if not isinstance(api_url, str) or not api_url.startswith("https://") or api_url.endswith("/"):
+        return ValueError, "api_url must be an https:// URL with no trailing / (the value is not shown)"
+    if token is not None and not isinstance(token, str):
+        return TypeError, "token must be a string"
+    return None
+
+
 def _refuse(message: str) -> NoReturn:
     raise PublishRefusedError(message)
 
@@ -185,13 +208,16 @@ class _Api:
         self.host = host
         self.base = f"{host.api_url}/repos/{host.repository}"
         self._own = host._client is None
-        # The headers are built inside each call below, so no frame holds them as a local.
+        # The token reaches each request through an httpx.Auth that holds it in a slot and withholds
+        # it from its repr, on both paths: no header dict of the client's or of a request carries
+        # it, so no frame, publish's or httpx's, holds it as a plain value.
+        self._auth = _bearer_auth_class()(_Token(host._resolve_token()))
         if host._client is None:
             # trust_env=False: building the client does not iterate the environment (which holds the
             # signing seed) for proxy settings, and reads no .netrc. A caller who needs a proxy or a
             # certificate bundle passes client=.
             self._http = httpx.Client(
-                headers=_headers(host),
+                headers=_HEADERS,
                 transport=host._transport,
                 timeout=host.timeout,
                 follow_redirects=False,
@@ -200,7 +226,7 @@ class _Api:
             self._headers: dict[str, str] = {}
         else:
             self._http = host._client
-            self._headers = _headers(host)
+            self._headers = dict(_HEADERS)
 
     def close(self) -> None:
         if self._own:
@@ -212,7 +238,12 @@ class _Api:
     def _send(self, method: str, path: str, body: Any = None, *, accept: str | None = None) -> httpx.Response:
         try:
             response = self._http.request(
-                method, self.base + path, json=body, headers=self._request_headers(accept), follow_redirects=False
+                method,
+                self.base + path,
+                json=body,
+                headers=self._request_headers(accept),
+                auth=self._auth,
+                follow_redirects=False,
             )
         except self._httpx.TransportError as error:
             _log.info("publish: %s %s -> no response (%s)", method, path, type(error).__name__)
@@ -260,13 +291,38 @@ class _Api:
         return _object_id(sha, f"the head of {self.host.branch}")
 
 
-def _headers(host: GitHubPagesHost) -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {host._resolve_token()}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "typedstandards-python",
-    }
+#: The headers each request carries. The token is not one of them: ``_bearer_auth_class`` adds it.
+_HEADERS = {
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "typedstandards-python",
+}
+
+
+@functools.cache
+def _bearer_auth_class() -> type:
+    """An ``httpx.Auth`` that sets ``Authorization: Bearer <token>`` on the request it sends. It
+    holds the token as a ``_Token`` in a slot; its ``repr`` withholds it, and it is not pickled.
+    httpx is imported here, so importing the package does not load it."""
+    import httpx
+
+    class BearerAuth(httpx.Auth):
+        __slots__ = ("_token",)
+
+        def __init__(self, token: _Token) -> None:
+            self._token = token
+
+        def __repr__(self) -> str:
+            return "<GitHub token withheld>"
+
+        def __reduce__(self) -> NoReturn:
+            raise TypeError("a token is not pickled")
+
+        def auth_flow(self, request: httpx.Request) -> Any:
+            request.headers["Authorization"] = "Bearer " + self._token.reveal()
+            yield request
+
+    return BearerAuth
 
 
 class _ApiError(PublishError):

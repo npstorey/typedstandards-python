@@ -230,7 +230,8 @@ ts.publish_attestation(withdrawal, host=host, name=receipt["name"])
 ```
 
 - **`GitHubPagesHost(repository, *, branch="main", token=None, ...)`**: the repository as
-  `owner/name`. Its `repr` shows the repository and the branch only. The HTTP client a call builds
+  `owner/name`. Its `repr` shows the repository and the branch only, and its errors never quote
+  an argument; a repository or branch shaped like a GitHub token is refused. The HTTP client a call builds
   ignores proxy and certificate environment variables; pass `client=` (an `httpx.Client`) for
   those.
 - **`publish(signed, *, host, title, name=None, notebook=None, role="notebook", revises=None)`**
@@ -328,8 +329,9 @@ message names the request and GitHub's own message.
 A fine-grained personal access token, for the one publishing repository, with **Contents: read
 and write** and nothing else (enough for a public repository; a private one is unmeasured). Give
 it an expiry. It comes from `token=`, else from `TYPEDSTANDARDS_GITHUB_TOKEN`, read when a publish
-runs; it is sent only as the `Authorization` header of the client the call builds and closes, and
-it is in no message, log record, receipt or file. Never write it as a literal in a cell. Locally,
+runs; it is added to each request's `Authorization` header by an `httpx.Auth` that holds it and
+withholds it from its `repr`, whether the call builds its client or uses one given as `client=`. It
+is in no message, log record, receipt, file, or frame local of a traceback. Never write it as a literal in a cell. Locally,
 set it with the seed, from the secret store that starts the kernel (`op run --env-file=… --
 jupyter lab`); in a hosted notebook, from the hosting service's secret store, as for the seed
 below.

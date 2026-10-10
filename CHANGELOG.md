@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- No frame of a publish holds the token as a plain value, with a given `client=` or the client the
+  call builds: the token reaches each request through an `httpx.Auth` that holds it and withholds
+  it from its `repr`, and no header dict carries it.
+- `GitHubPagesHost`'s errors never quote their argument, and a `repository` or `branch` shaped
+  like a GitHub token is refused.
+
 ## 0.2.0 — 2026-10-09
 
 - `publish(signed, *, host, title, name=None, notebook=None, role="notebook", revises=None)` and
