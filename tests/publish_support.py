@@ -142,5 +142,15 @@ def github(
     return FakeGitHub(files, token=TOKEN)
 
 
-def host(gh: FakeGitHub, **kwargs: Any) -> ts.GitHubPagesHost:
+#: How a test host reaches the fake API: through a client publish builds (``transport=``), or
+#: through a client the caller gives (``client=``).
+HOST_MODES = ("transport", "client")
+
+
+def host(gh: FakeGitHub, mode: str = "transport", **kwargs: Any) -> ts.GitHubPagesHost:
+    if mode == "client":
+        import httpx
+
+        given = httpx.Client(transport=gh.transport(), event_hooks=kwargs.pop("event_hooks", None) or {})
+        return ts.GitHubPagesHost(gh.repository, token=TOKEN, client=given, **kwargs)
     return ts.GitHubPagesHost(gh.repository, token=TOKEN, transport=gh.transport(), **kwargs)

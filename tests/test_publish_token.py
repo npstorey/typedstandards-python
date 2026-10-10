@@ -30,7 +30,7 @@ from typing import Any
 import httpx
 import pytest
 from github_stub import FakeGitHub  # publish_support puts scripts/ on the path
-from publish_support import TOKEN, Docs, github, host
+from publish_support import HOST_MODES, TOKEN, Docs, github, host
 
 import typedstandards as ts
 
@@ -73,7 +73,7 @@ def captured(call: Callable[[], Any]) -> list[tuple[str, str]]:
             warnings.simplefilter("always")
             try:
                 texts.append(("return value", repr(call())))
-            except Exception as error:  # every exception's text is scanned
+            except (Exception, KeyboardInterrupt) as error:  # every exception's text is scanned
                 texts.append(("exception str", str(error)))
                 texts.append(("exception repr", repr(error)))
                 texts.append(("traceback", "".join(traceback.format_exception(error))))
@@ -98,7 +98,7 @@ def leaks(token: str, texts: list[tuple[str, str]]) -> list[str]:
 # --- every publish path, scanned -------------------------------------------------------------
 
 
-def publish_paths(docs: Docs) -> dict[str, Callable[[], Any]]:
+def publish_paths(docs: Docs, mode: str = "transport") -> dict[str, Callable[[], Any]]:
     """Each path of acceptance 1 as a call, on a fresh fake host per call."""
 
     def run(listed: dict | None = None, setup: Callable[[FakeGitHub], None] | None = None, **kwargs: Any):
@@ -108,8 +108,8 @@ def publish_paths(docs: Docs) -> dict[str, Callable[[], Any]]:
                 setup(gh)
             target = kwargs.pop("_target", "publish")
             if target == "attestation":
-                return ts.publish_attestation(docs.withdrawal, host=host(gh), name="dog-licensing")
-            return ts.publish(kwargs.pop("_signed", docs.first), host=host(gh), **kwargs)
+                return ts.publish_attestation(docs.withdrawal, host=host(gh, mode), name="dog-licensing")
+            return ts.publish(kwargs.pop("_signed", docs.first), host=host(gh, mode), **kwargs)
 
         return call
 
@@ -136,9 +136,11 @@ def publish_paths(docs: Docs) -> dict[str, Callable[[], Any]]:
     }
 
 
-def test_no_output_holds_the_token_on_any_publish_path(docs: Docs) -> None:
+@pytest.mark.parametrize("mode", HOST_MODES)
+def test_no_output_holds_the_token_on_any_publish_path(docs: Docs, mode: str) -> None:
+    """Each path, with the client publish builds and with a client the caller gives."""
     found = {}
-    for label, call in publish_paths(docs).items():
+    for label, call in publish_paths(docs, mode).items():
         texts = captured(call)
         assert texts, label
         if leaks(TOKEN, texts):
@@ -336,3 +338,69 @@ def test_publishing_reads_the_token_variable_and_never_the_whole_environment(
     assert ts.TOKEN_VARIABLE in recorder.keys_read
     assert SEED_VARIABLE not in recorder.keys_read
     assert recorder.read_all is False
+
+
+# --- an exception that escapes the HTTP client, with either client ------------------------------
+
+
+def _raises_inside(request: httpx.Request) -> httpx.Response:
+    raise RuntimeError("a transport failed with an error that is not a transport error")
+
+
+def _interrupted(request: httpx.Request) -> httpx.Response:
+    raise KeyboardInterrupt
+
+
+def _undecodable(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, headers={"content-encoding": "gzip"}, content=b"not gzip data")
+
+
+def _failing_hook(request: httpx.Request) -> None:
+    raise RuntimeError("an event hook failed")
+
+
+ESCAPES = {
+    "an error raised inside the transport": (_raises_inside, None),
+    "an interrupt inside the transport": (_interrupted, None),
+    "a body that does not decode": (_undecodable, None),
+    "an error raised by an event hook": (None, _failing_hook),
+}
+
+
+@pytest.mark.parametrize("mode", HOST_MODES)
+@pytest.mark.parametrize("escape", ESCAPES)
+def test_no_frame_holds_the_token_when_an_exception_escapes_the_client(docs: Docs, mode: str, escape: str) -> None:
+    """No frame a traceback shows, publish's or httpx's, holds the token as a plain value, with a
+    given client or publish's own, whatever escapes the request."""
+    handler, hook = ESCAPES[escape]
+    if hook is not None and mode == "transport":
+        pytest.skip("an event hook belongs to a client the caller gives")
+
+    def call() -> Any:
+        gh = github(docs)
+        if handler is not None:
+            gh.hook = handler
+        kwargs = {"event_hooks": {"request": [hook]}} if hook is not None else {}
+        return ts.publish(docs.first, host=host(gh, mode, **kwargs), name="dog-licensing", title="T")
+
+    texts = captured(call)
+    assert any(where == "traceback with locals" for where, _ in texts), texts
+    assert leaks(TOKEN, texts) == []
+
+
+# --- GitHubPagesHost's own errors -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("argument", ["repository", "branch", "api_url"])
+def test_the_hosts_errors_never_quote_their_argument(argument: str) -> None:
+    """A token-shaped value given as the wrong argument stays out of the error's str, repr and
+    traceback with locals, and so does the token= given beside it."""
+    value = "github_pat_TESTONLY_given_as_the_wrong_argument"
+    kwargs: dict[str, Any] = {"token": TOKEN}
+    if argument == "repository":
+        texts = captured(lambda: ts.GitHubPagesHost(value, **kwargs))
+    else:
+        texts = captured(lambda: ts.GitHubPagesHost("example-owner/example-host", **{argument: value}, **kwargs))
+    assert any(where == "exception repr" and text.startswith("ValueError(") for where, text in texts), texts
+    assert leaks(value, texts) == []
+    assert leaks(TOKEN, texts) == []
