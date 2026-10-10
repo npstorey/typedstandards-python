@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 — 2026-10-10
 
 - The token reaches each request through an `httpx.Auth` that holds it and withholds it from its
   `repr`, with a given `client=` or the client the call builds; no header dict carries it. When an
