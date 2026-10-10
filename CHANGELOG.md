@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- The token reaches each request through an `httpx.Auth` that holds it and withholds it from its
+  `repr`, with a given `client=` or the client the call builds; no header dict carries it. When an
+  exception escapes a request, the locals of the frames it carries (httpx's, httpcore's and h11's
+  included) are cleared before it propagates, so a traceback with frame locals does not show the
+  token. Tested with httpx's mock transport and with its real transport over a failing stream.
+- `GitHubPagesHost`'s errors never quote their argument. A `repository` or `branch` with a part
+  shaped like a GitHub token (a token prefix, then 30 or more token characters) is refused; a
+  short name with a token prefix is accepted.
+
 ## 0.2.0 — 2026-10-09
 
 - `publish(signed, *, host, title, name=None, notebook=None, role="notebook", revises=None)` and
