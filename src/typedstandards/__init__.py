@@ -29,7 +29,7 @@ from .errors import (
 )
 from .pin import Pinned, pin
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 #: The version of @typedstandards/cli this release vendors (package.json pins it exactly).
 CLI_VERSION = "0.2.0"
