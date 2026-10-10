@@ -166,14 +166,16 @@ def _token_problem(value: str | None, source: str) -> str | None:
     return None
 
 
-#: The prefixes of GitHub's token formats: a value that starts with one is a token, not a name.
-_TOKEN_PREFIXES = ("github_pat_", "ghp_", "gho_", "ghu_", "ghs_", "ghr_")
+#: A token-shaped part of a name: one of GitHub's token prefixes, then 30 or more token
+#: characters. The shortest documented token runs 36 after its prefix (a 40-character classic
+#: token); a short name with a prefix, such as ``ghp_notes``, is a name.
+_TOKEN_SHAPED = re.compile(r"^(?:github_pat_|ghp_|gho_|ghu_|ghs_|ghr_)[A-Za-z0-9_.-]{30,}$")
 
 
 def _host_argument_problem(repository: Any, branch: Any, api_url: Any, token: Any) -> tuple[type, str] | None:
     """Why ``GitHubPagesHost`` refuses its arguments, in words that quote none of them."""
     for label, value in (("repository", repository), ("branch", branch)):
-        if isinstance(value, str) and any(part.startswith(_TOKEN_PREFIXES) for part in value.split("/")):
+        if isinstance(value, str) and any(_TOKEN_SHAPED.match(part) for part in value.split("/")):
             return ValueError, (
                 f"{label} looks like a GitHub token (the value is not shown): pass a token as token=, or set "
                 f"{TOKEN_VARIABLE}"
@@ -210,7 +212,9 @@ class _Api:
         self._own = host._client is None
         # The token reaches each request through an httpx.Auth that holds it in a slot and withholds
         # it from its repr, on both paths: no header dict of the client's or of a request carries
-        # it, so no frame, publish's or httpx's, holds it as a plain value.
+        # it. httpcore and h11 hold the request head while they write it; _send clears the locals
+        # of those frames from whatever escapes the request. Tested on MockTransport and on
+        # httpx.HTTPTransport with a failing stream (tests/test_publish_transport.py).
         self._auth = _bearer_auth_class()(_Token(host._resolve_token()))
         if host._client is None:
             # trust_env=False: building the client does not iterate the environment (which holds the
@@ -246,8 +250,12 @@ class _Api:
                 follow_redirects=False,
             )
         except self._httpx.TransportError as error:
+            _clear_frames(error)
             _log.info("publish: %s %s -> no response (%s)", method, path, type(error).__name__)
             raise _NoResponse(f"{method} {path}: no response ({type(error).__name__})") from None
+        except BaseException as error:  # KeyboardInterrupt included; it is re-raised as itself
+            _clear_frames(error)
+            raise
         _log.info("publish: %s %s -> %s", method, path, response.status_code)
         return response
 
@@ -323,6 +331,24 @@ def _bearer_auth_class() -> type:
             yield request
 
     return BearerAuth
+
+
+def _clear_frames(error: BaseException) -> None:
+    """Clear the locals of every finished frame the exception and the exceptions chained to it
+    (``__cause__``, ``__context__``) carry. Below ``Client.request``, httpcore and h11 hold the
+    request head, Authorization line included, while they write it; a traceback with frame locals
+    would print those frames. Frames still executing, publish's own among them, are skipped."""
+    import traceback
+
+    seen: set[int] = set()
+    pending: list[BaseException | None] = [error]
+    while pending:
+        current = pending.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        traceback.clear_frames(current.__traceback__)
+        pending += [current.__cause__, current.__context__]
 
 
 class _ApiError(PublishError):

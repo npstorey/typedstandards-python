@@ -227,10 +227,24 @@ def _offender(docs: Docs, how: str) -> Callable[[], Any]:
                 warnings.warn(f"sent {value}", stacklevel=1)
             elif how == "exception":
                 raise RuntimeError(f"sent {value}")
-            elif how == "frame local":
-                raise RuntimeError("a frame holding the header as a local raised")
             return None
 
+        if how == "frame local":
+            # A step after the request (the receipt) whose frame holds the token and raises. publish
+            # clears the frames below a request, so the offending frame is one it does not clear.
+            from typedstandards import _publish
+
+            real = _publish._receipt
+
+            def leaky_receipt(*args: Any, **kwargs: Any) -> Any:
+                held = TOKEN  # noqa: F841  (the offending local)
+                raise RuntimeError("a frame holding the token as a local raised")
+
+            _publish._receipt = leaky_receipt
+            try:
+                return ts.publish(docs.first, host=host(gh), name="dog-licensing", title="T")
+            finally:
+                _publish._receipt = real
         gh.hook = leak
         return ts.publish(docs.first, host=host(gh), name="dog-licensing", title="T")
 
