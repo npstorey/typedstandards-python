@@ -410,3 +410,34 @@ def test_the_hosts_errors_never_quote_their_argument(argument: str) -> None:
     assert any(where == "exception repr" and text.startswith("ValueError(") for where, text in texts), texts
     assert leaks(WRONG_ARGUMENT, texts) == []
     assert leaks(TOKEN, texts) == []
+
+
+#: A token-shaped part: a token prefix and a run of token characters as long as a token's. Built at
+#: run time, so this file holds no literal of a token's shape.
+TOKEN_SHAPED = "ghp_" + "TESTONLY" * 5
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"repository": "example-owner/ghp_notes"},
+        {"repository": "example-owner/gho_tools"},
+        {"repository": "example-owner/github_pat_docs"},
+        {"repository": "example-owner/example-host", "branch": "ghs_release-notes"},
+    ],
+    ids=["a ghp_ repository", "a gho_ repository", "a github_pat_ repository", "a ghs_ branch"],
+)
+def test_a_name_that_starts_with_a_token_prefix_is_accepted(kwargs: dict[str, str]) -> None:
+    """Only a token-shaped part is refused: a short name with a token prefix is a name."""
+    made = ts.GitHubPagesHost(**kwargs)
+    assert made.repository == kwargs["repository"]
+
+
+@pytest.mark.parametrize("argument", ["repository", "branch"])
+def test_a_token_shaped_repository_or_branch_is_refused(argument: str) -> None:
+    kwargs = {"repository": "example-owner/example-host", argument: f"example-owner/{TOKEN_SHAPED}"}
+    if argument == "branch":
+        kwargs["branch"] = TOKEN_SHAPED
+    with pytest.raises(ValueError, match="looks like a GitHub token") as caught:
+        ts.GitHubPagesHost(**kwargs)
+    assert TOKEN_SHAPED not in str(caught.value) and TOKEN_SHAPED not in repr(caught.value)
